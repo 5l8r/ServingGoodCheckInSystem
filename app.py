@@ -316,13 +316,6 @@ def signup_page():
 ###############################################################################
 @app.route("/signup", methods=["POST"])
 def process_signup():
-    """
-    1) Check blacklist
-    2) Check if user phone or email is already in Master => block
-    3) Add user to Master
-    4) If no group_phone => put user alone in a group
-    5) If group_phone => updateGroup for each phone provided
-    """
     data = request.get_json() or {}
     fname = data.get("firstName","").strip()
     lname = data.get("lastName","").strip()
@@ -334,21 +327,32 @@ def process_signup():
     if not phone or not fname or not lname or not email:
         return jsonify({"error": "Please provide all required fields."})
 
-    # 1) Check Blacklist with shorter timeout
+    # Check if user already exists
+    try:
+        check_existing = requests.post(SCRIPT_URL, 
+            json={"addMasterList": {"phone": phone}}, 
+            timeout=10
+        )
+        existing_json = check_existing.json()
+        if existing_json.get("existing"):
+            return jsonify({"error": "This phone number is already registered."})
+    except Exception as e:
+        logger.exception("[SIGNUP] existing check error:")
+        return jsonify({"error": "Unable to verify registration status."})
+
+    # Check Blacklist
     try:
         black_resp = requests.post(SCRIPT_URL, json={"checkBlacklist": phone}, timeout=10)
         black_json = black_resp.json()
         if black_json.get("banned"):
             return jsonify({
-                "error": "Sorry, but you have been banned from Serving Good's Alpine market. If you believe this is a mistake, please contact an administrator."
+                "error": "Sorry, but you have been banned from Serving Good's Alpine market."
             })
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "Server is busy. Please try again in a few moments."})
     except Exception as e:
         logger.exception("[SIGNUP] blacklist check error:")
         return jsonify({"error": "Unable to verify registration status."})
 
-    # 2) Add to Master List with retry logic
+    # Add to Master List
     signup_payload = {
         "addMasterList": {
             "firstName": fname,
@@ -358,56 +362,56 @@ def process_signup():
         }
     }
 
-    retry_count = 0
-    while retry_count < 2:
-        try:
-            add_resp = requests.post(SCRIPT_URL, json=signup_payload, timeout=15)
-            add_json = add_resp.json()
-            if add_json.get("error"):
-                return jsonify({"error": add_json["error"]})
-            break
-        except requests.exceptions.Timeout:
-            retry_count += 1
-            if retry_count == 2:
-                return jsonify({"error": "Server is busy. Please try again in a few moments."})
-            time.sleep(1)  # Brief pause before retry
-        except Exception as e:
-            logger.exception("[SIGNUP] addMasterList error:")
-            return jsonify({"error": "Unable to complete registration. Please try again."})
+    try:
+        add_resp = requests.post(SCRIPT_URL, json=signup_payload, timeout=15)
+        add_json = add_resp.json()
+        if add_json.get("error"):
+            return jsonify({"error": add_json["error"]})
+    except Exception as e:
+        logger.exception("[SIGNUP] addMasterList error:")
+        return jsonify({"error": "Unable to complete registration."})
 
-    # 3) Handle group assignment
+    # Handle group assignment
     if not group_phone:
-        auto_update_payload = {
-            "updateGroup": {
-                "primaryPhone": phone,
-                "secondaryPhone": phone
-            }
-        }
         try:
-            grp_resp = requests.post(SCRIPT_URL, json=auto_update_payload, timeout=15)
-            grp_json = grp_resp.json()
-            if grp_json.get("error"):
-                logger.error(f"Group assignment failed: {grp_json['error']}")
+            grp_resp = requests.post(SCRIPT_URL, 
+                json={"updateGroup": {"primaryPhone": phone, "secondaryPhone": phone}},
+                timeout=15
+            )
+            if grp_resp.json().get("error"):
+                # Rollback the master list entry
+                rollback_payload = {"removeMasterList": {"phone": phone}}
+                requests.post(SCRIPT_URL, json=rollback_payload, timeout=10)
+                return jsonify({"error": "Unable to complete registration."})
         except Exception as e:
-            logger.exception("[SIGNUP] single user group assignment error:")
+            logger.exception("[SIGNUP] group assignment error:")
+            rollback_payload = {"removeMasterList": {"phone": phone}}
+            requests.post(SCRIPT_URL, json=rollback_payload, timeout=10)
+            return jsonify({"error": "Unable to complete registration."})
     else:
-        gphone_list = [x.strip() for x in group_phone.split(",") if x.strip()]
-        for gphone_item in gphone_list:
-            gphone_norm = normalize_phone(gphone_item)
+        success = True
+        for gphone in [x.strip() for x in group_phone.split(",") if x.strip()]:
+            gphone_norm = normalize_phone(gphone)
             if gphone_norm:
-                group_payload = {
-                    "updateGroup": {
-                        "primaryPhone": phone,
-                        "secondaryPhone": gphone_norm
-                    }
-                }
                 try:
-                    group_resp = requests.post(SCRIPT_URL, json=group_payload, timeout=15)
-                    group_json = group_resp.json()
-                    if group_json.get("error"):
-                        logger.error(f"Group update failed: {group_json['error']}")
-                except Exception as e:
-                    logger.exception("[SIGNUP] group update error:")
+                    group_resp = requests.post(SCRIPT_URL,
+                        json={"updateGroup": {
+                            "primaryPhone": phone,
+                            "secondaryPhone": gphone_norm
+                        }},
+                        timeout=15
+                    )
+                    if group_resp.json().get("error"):
+                        success = False
+                        break
+                except Exception:
+                    success = False
+                    break
+        
+        if not success:
+            rollback_payload = {"removeMasterList": {"phone": phone}}
+            requests.post(SCRIPT_URL, json=rollback_payload, timeout=10)
+            return jsonify({"error": "Unable to complete group registration."})
 
     return jsonify({"success": True})
 
