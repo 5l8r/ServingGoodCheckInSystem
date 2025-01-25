@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Serving Good Market Check-In</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f9f9f9;
+      margin: 0; padding: 0;
+      display: flex; justify-content: center; align-items: center;
+      height: 100vh;
+    }
+    .container {
+      max-width: 400px; width: 90%;
+      background: white; border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      padding: 20px; text-align: center;
+      position: relative;
+    }
+    h1 {
+      color: #333; font-size: 28px; margin-bottom: 10px;
+    }
+    h2 {
+      color: #000; font-size: 20px; margin-bottom: 20px;
+    }
+    .status {
+      font-size: 18px; font-weight: bold;
+    }
+    .status span.open { color: green; }
+    .status span.closed { color: red; }
+
+    label {
+      text-align: left; display: block; font-size: 14px; color: #333; margin-bottom: 5px;
+    }
+    input[type="text"] {
+      width: 100%; padding: 10px; font-size: 16px;
+      margin-bottom: 10px; border: 1px solid #ccc;
+      border-radius: 5px; box-sizing: border-box;
+    }
+    button {
+      background-color: #007bff; color: white;
+      border: none; padding: 10px 15px; font-size: 16px;
+      border-radius: 5px; cursor: pointer; width: 100%;
+      margin-top: 10px; transition: background-color 0.2s ease-in;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    button:disabled {
+      background-color: #d6d6d6; cursor: not-allowed;
+    }
+    .error, .status-message {
+      font-weight: bold;
+    }
+    .error {
+      color: red; font-size: 14px;
+    }
+    .spinner {
+      display: none;
+      margin: 20px auto;
+      border: 4px solid #f3f3f3; border-top: 4px solid #3498db;
+      border-radius: 50%; width: 40px; height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .spot-message {
+      font-size: 2.25rem;
+      font-weight: bold;
+      margin-top: 5px; margin-bottom: 5px;
+    }
+    .nil-display {
+      font-size: 9rem; font-weight: bold;
+      margin-top: 10px; margin-bottom: 10px;
+    }
+    .first-name-display {
+      font-size: 2.25rem; font-weight: bold; color: #000;
+      margin-top: 3px; margin-bottom: 3px;
+    }
+    .verify-date {
+      font-size: 1.5rem; font-weight: bold;
+      margin-top: 5px; margin-bottom: 5px;
+    }
+    .red-text { color: red; }
+
+    #reset-btn {
+      background-color: #dc3545;
+      transition: background-color 0.2s ease-in;
+      margin-bottom: 30px;
+    }
+    #reset-btn:hover {
+      background-color: #b52d3a;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Serving Good Check-In</h1>
+    <h2>Market Info</h2>
+
+    {% if error %}
+      <p class="error">{{ error }}</p>
+    {% else %}
+      <p><strong>Next Market:</strong>
+        {% if next_market_str %}
+          {{ next_market_str }}
+        {% else %}
+          <span class="red-text">No Future Market Date Found</span>
+        {% endif %}
+      </p>
+
+      {% if current_market %}
+        <p><strong>Today's Check-in:</strong>
+          {{ check_in_start }} - {{ check_in_end }} PST
+        </p>
+      {% else %}
+        <p><strong>Today's Check-in:</strong>
+          <span class="red-text">No Market Today</span>
+        </p>
+      {% endif %}
+
+      <p class="status">
+        Check In:
+        <span class="{{ 'open' if is_open else 'closed' }}">
+          {{ "OPEN" if is_open else "CLOSED" }}
+        </span>
+      </p>
+    {% endif %}
+
+    <form id="checkin-form">
+      <div class="form-group">
+        <label for="phone">Phone Number</label>
+        <input type="text" id="phone" placeholder="Enter your phone number" required />
+      </div>
+      <button id="checkin-button" type="submit" disabled>Check In</button>
+    </form>
+
+    <!-- NEW SIGN UP BUTTON -->
+    <button id="signup-button" style="background-color: green;">
+      Sign Up
+    </button>
+
+    {% if reset %}
+      <button id="reset-btn">Reset</button>
+    {% endif %}
+
+    <div class="spinner" id="loading-spinner"></div>
+    <p id="response-message" class="status-message"></p>
+  </div>
+
+  <script>
+    const SHOW_NAME = true;
+    const LOCAL_STORAGE_EXPIRATION_MS = 10800000; // 3 hrs
+    const VERBOSE_LOGS = true;
+    function logDebug(...args){ if(VERBOSE_LOGS) console.log(...args); }
+
+    let pollInterval = null;
+    const isMarketOpen = JSON.parse('{{ is_open | tojson }}');  // Safe JSON embedding
+
+    const checkInButton = document.getElementById("checkin-button");
+    const form = document.getElementById("checkin-form");
+    const spinner = document.getElementById("loading-spinner");
+    const responseMsg = document.getElementById("response-message");
+    const phoneInput = document.getElementById("phone");
+    const resetBtn = document.getElementById("reset-btn");
+    const signupButton = document.getElementById("signup-button");
+
+
+    function frontEndNormalizePhone(raw){
+      if(!raw) return null;
+      const stripped= raw.replace(/[^\d]/g,"");
+      if(stripped.length===10) return stripped;
+      if(stripped.length===11 && stripped.startsWith("1")) {
+        return stripped.slice(1);
+      }
+      return null;
+    }
+
+    function resetEverything(){
+      logDebug("resetEverything() called.");
+      if(pollInterval){
+        clearInterval(pollInterval);
+        pollInterval=null;
+      }
+      localStorage.clear();
+
+      responseMsg.textContent="";
+      spinner.style.display="none";
+      phoneInput.value="";
+
+      const nilEl= document.querySelector(".nil-display");
+      if(nilEl) nilEl.remove();
+      const spotMsg= document.querySelector(".spot-message");
+      if(spotMsg) spotMsg.remove();
+      const verDate= document.querySelector(".verify-date");
+      if(verDate) verDate.remove();
+      const fnEl= document.querySelector(".first-name-display");
+      if(fnEl) fnEl.remove();
+
+      checkInButton.disabled=true;
+    }
+
+    function createSpotMessage(){
+      const old= document.querySelector(".spot-message");
+      if(old) old.remove();
+      const msg= document.createElement("div");
+      msg.classList.add("spot-message");
+      msg.textContent="Your spot in line is:";
+      document.querySelector(".container").appendChild(msg);
+      return msg;
+    }
+
+    function formatToMMDDYYYY(yyyy_mm_dd){
+      if(!yyyy_mm_dd||!/^\d{4}-\d{2}-\d{2}$/.test(yyyy_mm_dd)) {
+        return yyyy_mm_dd;
+      }
+      const parts= yyyy_mm_dd.split("-");
+      return `${parts[1]}/${parts[2]}/${parts[0]}`;
+    }
+
+    function chooseColor(str){
+      if(!str) return "#000000";
+      switch(str.toUpperCase()){
+        case "RED":    return "#b00000";
+        case "ORANGE": return "#cc5500";
+        case "GREEN":  return "#006600";
+        case "BLUE":   return "#000080";
+        case "PURPLE": return "#5b3f8c";
+        case "PINK":   return "#c800c8";
+        case "YELLOW": return "#b5b50f";
+        default:       return "#000000";
+      }
+    }
+
+    function displayNIL(nil){
+      logDebug("displayNIL =>",nil);
+      const oldNIL= document.querySelector(".nil-display");
+      if(oldNIL) oldNIL.remove();
+
+      const div= document.createElement("div");
+      div.classList.add("nil-display");
+      const storedColor= localStorage.getItem("marketColor")||"BLACK";
+      div.style.color= chooseColor(storedColor);
+      div.textContent= nil;
+      document.querySelector(".container").appendChild(div);
+
+      if(SHOW_NAME){
+        const storedFirstName= localStorage.getItem("firstName")||"";
+        if(storedFirstName){
+          const fnBlock= document.createElement("div");
+          fnBlock.classList.add("first-name-display");
+          fnBlock.textContent=`Hi, my name is ${storedFirstName}!`;
+          document.querySelector(".container").appendChild(fnBlock);
+        }
+      }
+
+      const oldVer= document.querySelector(".verify-date");
+      if(oldVer) oldVer.remove();
+      const ver= document.createElement("div");
+      ver.classList.add("verify-date");
+      const savedDateRaw= localStorage.getItem("marketDate")||"";
+      const savedDateFormatted= formatToMMDDYYYY(savedDateRaw);
+      ver.style.color= chooseColor(storedColor);
+      ver.textContent= `ONLY VALID FOR ${savedDateFormatted}`;
+      document.querySelector(".container").appendChild(ver);
+
+      spinner.style.display="none";
+    }
+
+    // parse times
+    function parseMarketTimes(){
+      const cStartRaw="{{ current_market.checkInStart if current_market else '' }}";
+      const cEndRaw=  "{{ current_market.checkInEnd if current_market else '' }}";
+      let cStartDate=null, cEndDate=null;
+
+      if(cStartRaw&& cStartRaw.includes(" ")){
+        const [datePart,timePart]= cStartRaw.trim().split(" ");
+        const [Y,Mo,D]= datePart.split("-").map(Number);
+        const [hh,mm,ss]= timePart.split(":").map(Number);
+        cStartDate=new Date(Y,Mo-1,D,hh,mm,ss);
+      }
+      if(cEndRaw&& cEndRaw.includes(" ")){
+        const [datePart,timePart]= cEndRaw.trim().split(" ");
+        const [Y,Mo,D]= datePart.split("-").map(Number);
+        const [hh,mm,ss]= timePart.split(":").map(Number);
+        cEndDate=new Date(Y,Mo-1,D,hh,mm,ss);
+      }
+      return { cStartDate,cEndDate };
+    }
+
+    window.onload= async ()=>{
+      checkInButton.disabled=true;
+      phoneInput.focus(); // auto-focus phone input
+
+      const savedPhone= localStorage.getItem("phone");
+      const savedStatus= localStorage.getItem("status");
+      const savedNIL= localStorage.getItem("NIL");
+      const timeStamp= localStorage.getItem("timestamp");
+
+      logDebug("Page load => localStorage:", { savedPhone,savedStatus,savedNIL,timeStamp });
+
+      // local storage older than 3hrs => reset
+      if(timeStamp && (Date.now()-parseInt(timeStamp,10)> LOCAL_STORAGE_EXPIRATION_MS)){
+        logDebug("Local data older than 3hrs => resetEverything");
+        resetEverything();
+        return;
+      }
+
+      const { cStartDate,cEndDate }= parseMarketTimes();
+      if(cStartDate && cEndDate){
+        const now= new Date();
+
+        if(now< cStartDate){
+          logDebug("now < cStart => resetEverything() with no message");
+          resetEverything();
+          return;
+        }
+
+        if(now> new Date(cEndDate.getTime()+ 3600000)){
+          logDebug("Now> cEnd+1hr => disabling checkIn, clearing localStorage, no forced error");
+          localStorage.clear();
+          checkInButton.disabled= true;
+          spinner.style.display= "none";
+          responseMsg.textContent= "";
+          return;
+        }
+      }
+
+      if(savedPhone && savedStatus!=="NILreceived"){
+        responseMsg.textContent="Processing...";
+        spinner.style.display="block";
+      }
+
+      if(savedStatus==="NILreceived" && savedNIL){
+        phoneInput.value= savedPhone||"";
+        createSpotMessage();
+        displayNIL(savedNIL);
+        return;
+      }
+
+      if(savedStatus==="polling" && savedPhone){
+        phoneInput.value= savedPhone;
+        try{
+          const valResp= await fetch("/validate",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ phone:savedPhone })
+          });
+          if(!valResp.ok){
+            resetEverything();
+            responseMsg.textContent="A server error occurred. Please try again.";
+            responseMsg.classList.add("error");
+            return;
+          }
+          const valJson= await valResp.json();
+          if(valJson.error){
+            resetEverything();
+            responseMsg.textContent= valJson.error;
+            responseMsg.classList.add("error");
+            return;
+          }
+
+          const nilCheck= await fetch("/nil",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ phone:savedPhone })
+          });
+          const nilJson= await nilCheck.json();
+          if(nilJson.NIL){
+            localStorage.setItem("NIL", nilJson.NIL);
+            localStorage.setItem("status","NILreceived");
+            if(nilJson.firstName){
+              localStorage.setItem("firstName", nilJson.firstName);
+            }
+            createSpotMessage();
+            displayNIL(nilJson.NIL);
+            responseMsg.textContent="";
+            checkInButton.disabled=true;
+          }
+          else if(nilJson.error==="NIL not yet assigned."){
+            if(nilJson.firstName){
+              localStorage.setItem("firstName", nilJson.firstName);
+            }
+            responseMsg.textContent="Waiting to receive your number in line...";
+            spinner.style.display="block";
+            checkInButton.disabled=true;
+            fetchNIL(savedPhone);
+          }
+          else{
+            resetEverything();
+            responseMsg.textContent="Sorry, but something went wrong. Please try checking in again.";
+            responseMsg.classList.add("error");
+          }
+        }catch(err){
+          resetEverything();
+          responseMsg.classList.add("error");
+          responseMsg.textContent=`Error: ${err.message}`;
+        }
+        return;
+      }
+
+      logDebug("isMarketOpen =>",isMarketOpen);
+      if(isMarketOpen!==true && isMarketOpen!=="true"){
+        if(cEndDate){
+          const now=new Date();
+          const diffMs= now.getTime()- cEndDate.getTime();
+          if(diffMs>=0 && diffMs<=3600000){
+            if(!savedPhone){
+              checkInButton.disabled=false;
+              localStorage.setItem("status","standby");
+              spinner.style.display="none";
+              responseMsg.textContent="";
+            }
+            return;
+          } else {
+            resetEverything();
+            responseMsg.innerHTML=`<span style="color:red; font-weight:bold;">
+              Sorry, but the check-in period is over, please make your way to the end of the line.
+            </span>`;
+          }
+        }
+        return;
+      }
+
+      if(!savedPhone){
+        localStorage.setItem("status","standby");
+        spinner.style.display="none";
+        responseMsg.textContent="";
+        checkInButton.disabled=false;
+      } else {
+        resetEverything();
+      }
+    };
+
+    form.addEventListener("submit", async(e)=>{
+      e.preventDefault();
+      const typed= phoneInput.value.trim();
+      if(!typed) return;
+
+      const normed= frontEndNormalizePhone(typed);
+      if(!normed){
+        responseMsg.innerHTML=`<span style="color:red; font-weight:bold;">
+          Invalid format, please try again with a valid phone number.
+        </span>`;
+        checkInButton.disabled=false;
+        spinner.style.display="none";
+        return;
+      }
+
+      logDebug("Form submit => typedPhone =",typed," => normed =",normed);
+
+      responseMsg.textContent="Processing...";
+      responseMsg.style.color="black";
+      responseMsg.classList.remove("error");
+      spinner.style.display="block";
+      checkInButton.disabled=true;
+
+      try{
+        const resp= await fetch("/checkin",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({phone:normed})
+        });
+
+        if(!resp.ok){
+          resetEverything();
+          responseMsg.textContent="A server error occurred. Please try again.";
+          responseMsg.classList.add("error");
+          spinner.style.display="none";
+          return;
+        }
+        const json= await resp.json();
+        logDebug("/checkin =>",json);
+
+        if(json.error){
+          if(json.error==="marketEnded"){
+            const {cEndDate}= parseMarketTimes();
+            if(cEndDate){
+              const now=new Date();
+              const diffMs= now.getTime()- cEndDate.getTime();
+              if(diffMs>=0&& diffMs<=3600000){
+                lateCheckInFlow(normed);
+                return;
+              }
+            }
+            responseMsg.innerHTML=`<span style="color:red; font-weight:bold;">
+              Sorry, but the check-in period is over, please make your way to the end of the line.
+            </span>`;
+            responseMsg.classList.add("error");
+            spinner.style.display="none";
+            checkInButton.disabled=false;
+            resetEverything();
+          }else{
+            if(json.error==="invalidFormat"){
+              responseMsg.innerHTML=`<span style="color:red; font-weight:bold;">
+                Invalid format, please try again with a valid phone number.
+              </span>`;
+              responseMsg.classList.add("error");
+              spinner.style.display="none";
+              checkInButton.disabled=false;
+            } else if(json.error==="userNotRegistered"){
+              responseMsg.innerHTML=`<span style="color:red; font-weight:bold;">
+                Sorry, but we don't have you in our system.
+              </span>`;
+              responseMsg.classList.add("error");
+              spinner.style.display="none";
+              checkInButton.disabled=false;
+            } else if(json.error==="noMarket"){
+              let nextMsg="No Future Market Date Found";
+              if(json.nextMarketString){
+                nextMsg= json.nextMarketString;
+              }
+              responseMsg.innerHTML=`<span style="color:red; font-weight:bold;">
+                Sorry, but there is no market today. ${nextMsg}
+              </span>`;
+              responseMsg.classList.add("error");
+              spinner.style.display="none";
+              checkInButton.disabled=false;
+            } else if(json.error==="checkInNotStarted"){
+              const st= json.startTime||"";
+              responseMsg.innerHTML=`<span style="color:red; font-weight:bold;">
+                Sorry, the check-in period has not started yet.
+                Please try again at ${st}.
+              </span>`;
+              responseMsg.classList.add("error");
+              spinner.style.display="none";
+              checkInButton.disabled=false;
+            } else {
+              responseMsg.innerHTML=`<span style="color:red; font-weight:bold;">
+                A server error occurred. Please try again later.
+              </span>`;
+              responseMsg.classList.add("error");
+              spinner.style.display="none";
+              checkInButton.disabled=false;
+            }
+          }
+          return;
+        }
+
+        localStorage.setItem("phone",normed);
+        localStorage.setItem("status","polling");
+        localStorage.setItem("timestamp",Date.now().toString());
+
+        if(json.color){
+          localStorage.setItem("marketColor", json.color);
+        }
+        if(json.marketDate){
+          localStorage.setItem("marketDate", json.marketDate);
+        }
+        if(json.firstName){
+          localStorage.setItem("firstName", json.firstName);
+        }
+
+        responseMsg.textContent= json.success || "Check-in successful! Please wait for your NIL number.";
+        responseMsg.style.color="green";
+        fetchNIL(normed);
+      }catch(err){
+        resetEverything();
+        responseMsg.classList.add("error");
+        responseMsg.textContent=`Error: ${err.message}`;
+        spinner.style.display="none";
+      }
+    });
+
+    async function lateCheckInFlow(typedPhone){
+      responseMsg.textContent="Processing...";
+      responseMsg.style.color="black";
+      responseMsg.classList.remove("error");
+      spinner.style.display="block";
+      checkInButton.disabled=true;
+
+      try{
+        const nilResp= await fetch("/nil",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ phone:typedPhone })
+        });
+        const nilJson= await nilResp.json();
+        logDebug("lateCheckInFlow => /nil =>",nilJson);
+
+        if(nilJson.NIL){
+          localStorage.setItem("phone", typedPhone);
+          localStorage.setItem("NIL", nilJson.NIL);
+          localStorage.setItem("status","NILreceived");
+          localStorage.setItem("timestamp",Date.now().toString());
+
+          const colorFallback="{{ current_market.color if current_market else 'BLACK' }}";
+          const dateFallback= "{{ current_market.date if current_market else '' }}";
+          localStorage.setItem("marketColor", colorFallback);
+          localStorage.setItem("marketDate", dateFallback);
+
+          if(nilJson.firstName){
+            localStorage.setItem("firstName", nilJson.firstName);
+          }
+
+          spinner.style.display="none";
+          responseMsg.textContent="";
+          createSpotMessage();
+          displayNIL(nilJson.NIL);
+        }
+        else if(nilJson.error==="NIL not yet assigned."){
+          localStorage.setItem("phone", typedPhone);
+          localStorage.setItem("status","polling");
+          localStorage.setItem("timestamp",Date.now().toString());
+
+          const colorFallback="{{ current_market.color if current_market else 'BLACK' }}";
+          const dateFallback= "{{ current_market.date if current_market else '' }}";
+          localStorage.setItem("marketColor", colorFallback);
+          localStorage.setItem("marketDate", dateFallback);
+
+          if(nilJson.firstName){
+            localStorage.setItem("firstName", nilJson.firstName);
+          }
+
+          responseMsg.textContent="Waiting to receive your number in line...";
+          fetchNIL(typedPhone);
+        } else {
+          spinner.style.display="none";
+          responseMsg.innerHTML=`<span style="color:red; font-weight:bold;">
+            Sorry, but the check-in period is over, please make your way to the end of the line.
+          </span>`;
+        }
+      }catch(err){
+        resetEverything();
+        responseMsg.classList.add("error");
+        responseMsg.textContent=`Error: ${err.message}`;
+      }
+    }
+
+    async function fetchNIL(phone){
+      responseMsg.textContent="Waiting to receive your number in line...";
+      responseMsg.style.color="black";
+      spinner.style.display="block";
+
+      try{
+        const savedCheckInReadyTime= localStorage.getItem("checkInReadyTime");
+        const now=new Date();
+        let checkInReadyTime;
+
+        function parseCheckInEndToDate(){
+          const base=new Date();
+          let hour=0, minute=0;
+          let isPM=false;
+          const parts="{{ check_in_end }}".split(" ");
+          if(parts.length===2){
+            const hm=parts[0].split(":");
+            hour=parseInt(hm[0],10)||0;
+            minute=parseInt(hm[1],10)||0;
+            isPM= (parts[1].toUpperCase()==="PM");
+          }
+          if(isPM && hour<12) hour+=12;
+          if(!isPM && hour===12) hour=0;
+          base.setHours(hour, minute,0,0);
+          return base;
+        }
+
+        if(savedCheckInReadyTime){
+          checkInReadyTime=new Date(parseInt(savedCheckInReadyTime,10));
+          logDebug("Existing checkInReadyTime =>",checkInReadyTime);
+        } else {
+          const endDate=parseCheckInEndToDate();
+          checkInReadyTime=new Date(endDate.getTime());
+          localStorage.setItem("checkInReadyTime", checkInReadyTime.getTime().toString());
+          logDebug("New checkInReadyTime =>",checkInReadyTime);
+        }
+
+        const delay= Math.max(0, checkInReadyTime.getTime()- now.getTime());
+        logDebug("Will start NIL polling in =>",delay,"ms");
+
+        setTimeout(()=>{
+          pollInterval= setInterval(async ()=>{
+            try{
+              logDebug("Polling /nil => phone =",phone);
+              const nilResp=await fetch("/nil",{
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body: JSON.stringify({ phone })
+              });
+              const nilJson=await nilResp.json();
+              logDebug("Poll => /nil =>",nilJson);
+
+              if(nilJson.NIL){
+                clearInterval(pollInterval);
+                pollInterval=null;
+                localStorage.setItem("NIL",nilJson.NIL);
+                localStorage.setItem("status","NILreceived");
+
+                if(nilJson.firstName){
+                  localStorage.setItem("firstName",nilJson.firstName);
+                }
+
+                responseMsg.textContent="";
+                createSpotMessage();
+                displayNIL(nilJson.NIL);
+                checkInButton.disabled=true;
+              }
+            }catch(err){
+              logDebug("Polling error =>",err);
+              responseMsg.classList.add("error");
+              responseMsg.textContent=`Error: ${err.message}`;
+              spinner.style.display="none";
+            }
+          },5000);
+        },delay);
+
+      }catch(err){
+        responseMsg.classList.add("error");
+        responseMsg.textContent="Error calculating polling delay.";
+        spinner.style.display="none";
+      }
+    }
+
+    if(resetBtn){
+      resetBtn.addEventListener("click",()=>{
+        resetEverything();
+        window.location.reload();
+      });
+    }
+
+    if(signupButton){
+      signupButton.addEventListener("click", ()=>{
+        window.location.href = "/signup";
+      });
+    }
+  </script>
+</body>
+</html>

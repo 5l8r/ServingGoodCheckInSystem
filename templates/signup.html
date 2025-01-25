@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Serving Good - Sign Up</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 0;
+      background-color: #f9f9f9;
+    }
+    .container {
+      max-width: 400px; width: 90%;
+      background: white; border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      padding: 20px; text-align: center;
+      margin: 50px auto;
+    }
+    label { display: block; text-align: left; margin-bottom: 5px; }
+    input[type="text"], input[type="email"] {
+      width: 100%; padding: 10px; font-size: 16px;
+      margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px;
+    }
+    .error { color: red; font-weight: bold; margin-top: 10px; }
+    .group-section {
+      margin-top: 15px; border: 1px solid #ccc; padding: 10px; display: none;
+    }
+    #toggle-group:checked ~ .group-section {
+      display: block;
+    }
+    button {
+      margin-top: 10px; background-color: green; color: #fff;
+      border: none; padding: 10px 15px; font-size: 16px;
+      border-radius: 5px; cursor: pointer; width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Sign Up for Serving Good</h1>
+
+    <form id="signup-form">
+      <label for="fname">First Name</label>
+      <input type="text" id="fname" name="fname" required />
+
+      <label for="lname">Last Name</label>
+      <input type="text" id="lname" name="lname" required />
+
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required />
+
+      <label for="phone">Phone Number</label>
+      <input type="text" id="phone" name="phone" placeholder="(555) 555-5555" required />
+
+      <p style="font-weight: bold;">
+        If you are shopping in a group, please toggle below and add your friend's phone number.
+        <span style="color:red; font-size:0.9rem;">
+          (Each shopper must show their own line number. No cutting in line or risk ban.)
+        </span>
+      </p>
+
+      <label>
+        <input type="checkbox" id="toggle-group" />
+        I am shopping in a group.
+      </label>
+
+      <div class="group-section">
+        <p style="font-weight: bold;">Add Group Member #1</p>
+        <input type="text" id="group-phone-1" placeholder="Friend's Phone Number" />
+      </div>
+
+      <button type="submit">Sign Up</button>
+    </form>
+
+    <div id="error-msg" class="error"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById("signup-form");
+    const errorDiv = document.getElementById("error-msg");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorDiv.textContent = "";
+
+      const fname = document.getElementById("fname").value.trim();
+      const lname = document.getElementById("lname").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+
+      const toggled = document.getElementById("toggle-group").checked;
+      let groupPhone = "";
+      if (toggled) {
+        groupPhone = document.getElementById("group-phone-1").value.trim();
+      }
+
+      if (!fname || !lname || !email || !phone) {
+        errorDiv.textContent = "Please fill all required fields.";
+        return;
+      }
+
+      const payload = {
+        firstName: fname,
+        lastName: lname,
+        email: email,
+        phone: phone,
+        groupPhone: groupPhone
+      };
+
+      try {
+        const resp = await fetch("/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          errorDiv.textContent = "A server error occurred. Please try again.";
+          return;
+        }
+        const json = await resp.json();
+        if (json.error) {
+          errorDiv.textContent = json.error;
+          return;
+        }
+        // success => redirect
+        alert("Signup success! You can now check in when the market is open.");
+        window.location.href = "/";
+      } catch (err) {
+        errorDiv.textContent = "Error: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
