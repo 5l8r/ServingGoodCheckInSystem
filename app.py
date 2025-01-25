@@ -15,7 +15,7 @@ VERBOSE_LOGS = True  # Set to False to silence extra logs
 app = Flask(__name__)
 
 # Google Apps Script URL
-SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyUA65S-zzMFRWt4tsLAJsETs8E3udtQvpuLBbnEcu3Z2omfu9KzHriMR3CfPTNMcPH/exec"
+SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxIWmcg695YBYL1Hs4aerzs0GYAXJ90XFQNHIzWhdHHOdGO752nGvzOHmx9JXZ1HgT5/exec"
 
 reset = True
 
