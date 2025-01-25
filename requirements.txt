@@ -3,3 +3,4 @@ Werkzeug>=2.0.0
 requests
 pytz
 gunicorn
+python-dotenv

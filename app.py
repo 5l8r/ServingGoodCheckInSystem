@@ -4,17 +4,23 @@ from datetime import datetime, timedelta
 import re
 import requests
 import pytz
+import os
 from urllib.parse import quote as url_quote
+from dotenv import load_dotenv
 
 ###############################################################################
 # TOGGLE VERBOSE LOGGING
 ###############################################################################
 VERBOSE_LOGS = True  # Set to False to silence extra logs
 
+load_dotenv()
+
 app = Flask(__name__)
 
 # Google Apps Script URL
-SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxIWmcg695YBYL1Hs4aerzs0GYAXJ90XFQNHIzWhdHHOdGO752nGvzOHmx9JXZ1HgT5/exec"
+SCRIPT_URL = os.getenv('GOOGLE_SCRIPT_URL')
+if not SCRIPT_URL:
+    raise ValueError("GOOGLE_SCRIPT_URL environment variable is not set")
 
 reset = True
 
@@ -100,7 +106,7 @@ def index():
             current_market = None
             next_market = None
 
-        # Construct next_market_str
+        # next_market_str for display
         next_market_str = ""
         if next_market:
             nm_date = format_date(next_market["date"])
@@ -137,9 +143,8 @@ def check_in():
     data = request.get_json() or {}
     raw_phone = data.get("phone", "")
     phone = normalize_phone(raw_phone)
-    logger.info(f"[CHECKIN] Attempting check-in with raw phone: {raw_phone}, normalized: {phone}")
+    logger.info(f"[CHECKIN] Attempting check-in with raw phone: %s, normalized: %s", raw_phone, phone)
 
-    # If phone is invalid => return "invalidFormat"
     if not phone:
         return jsonify({"error": "invalidFormat"})
 
@@ -151,7 +156,7 @@ def check_in():
         val_resp = requests.post(SCRIPT_URL, json=val_payload, timeout=25)
         val_json = val_resp.json()
         if VERBOSE_LOGS:
-            logger.debug(f"[CHECKIN] Validation response: {val_json}")
+            logger.debug(f"[CHECKIN] Validation response: %s", val_json)
 
         if val_json.get("error") == "userNotRegistered":
             return jsonify({"error": "userNotRegistered"})
@@ -162,7 +167,7 @@ def check_in():
         market_resp = requests.get(f"{SCRIPT_URL}?marketInfo=true", timeout=25)
         market_data = market_resp.json()
         if VERBOSE_LOGS:
-            logger.debug(f"[CHECKIN] Market info: {market_data}")
+            logger.debug(f"[CHECKIN] Market info: %s", market_data)
 
         current_market = market_data.get("currentMarket")
         next_market = market_data.get("nextMarket")
@@ -193,10 +198,7 @@ def check_in():
 
         if now < check_in_start:
             friendly_start = convert_to_12_hour(cstart_str.split(" ")[1])
-            return jsonify({
-                "error": "checkInNotStarted",
-                "startTime": friendly_start
-            })
+            return jsonify({"error": "checkInNotStarted","startTime": friendly_start})
 
         if now > check_in_end:
             return jsonify({"error": "marketEnded"})
@@ -206,7 +208,7 @@ def check_in():
         checkin_resp = requests.post(SCRIPT_URL, json=c_payload, timeout=25)
         c_data = checkin_resp.json()
         if VERBOSE_LOGS:
-            logger.debug(f"[CHECKIN] checkInSheet response: {c_data}")
+            logger.debug(f"[CHECKIN] checkInSheet response: %s", c_data)
 
         if "error" in c_data:
             if c_data["error"] == "alreadyCheckedIn":
@@ -247,12 +249,12 @@ def validate():
         v_resp = requests.post(SCRIPT_URL, json=payload, timeout=25)
         v_data = v_resp.json()
         if VERBOSE_LOGS:
-            logger.debug(f"[VALIDATE] response from Apps Script: {v_data}")
+            logger.debug(f"[VALIDATE] response from Apps Script: %s", v_data)
 
         if "error" in v_data:
             return jsonify({"error": v_data["error"]})
         else:
-            # If there's no error, user is found
+            # If there's no error => phone found in Master
             return jsonify({"success": True})
     except requests.exceptions.Timeout:
         logger.exception("[VALIDATE] Timed out after ~25s in the server.")
@@ -280,7 +282,7 @@ def get_nil():
 
         r_data = n_resp.json()
         if VERBOSE_LOGS:
-            logger.debug(f"[NIL] handleNILRetrieval response: {r_data}")
+            logger.debug(f"[NIL] handleNILRetrieval response: %s", r_data)
 
         if "NIL" in r_data:
             return jsonify({
@@ -295,7 +297,7 @@ def get_nil():
         else:
             return jsonify({"error": "internalError"})
     except requests.exceptions.Timeout:
-        logger.exception("[NIL] Timed out after ~25s in server.")
+        logger.exception("[NIL] Timed out after ~25s in the server.")
         return jsonify({"error": "internalError"})
     except Exception as e:
         logger.exception("[NIL] Exception:")
@@ -314,11 +316,11 @@ def signup_page():
 @app.route("/signup", methods=["POST"])
 def process_signup():
     """
-    1) Check if user phone is in Blacklist => if so, error
-    1.5) Check if user phone is already in Master List => block if found
-    1.6) Check if user already exists by phone/email => block if found
-    2) Add user to Master List
-    3) If group_phone => updateGroup
+    1) Check blacklist
+    2) Check if user phone or email is already in Master => block
+    3) Add user to Master
+    4) If no group_phone => put user alone in a group
+    5) If group_phone => updateGroup for each phone provided
     """
     data = request.get_json() or {}
     fname = data.get("firstName","").strip()
@@ -332,9 +334,8 @@ def process_signup():
         return jsonify({"error": "Please provide all required fields."})
 
     # 1) Check Blacklist
-    check_payload = { "checkBlacklist": phone }
     try:
-        black_resp = requests.post(SCRIPT_URL, json=check_payload, timeout=25)
+        black_resp = requests.post(SCRIPT_URL, json={ "checkBlacklist": phone }, timeout=25)
         black_json = black_resp.json()
         if black_json.get("banned"):
             return jsonify({"error": "Sorry, but you have been banned from Serving Good's Alpine market. If you believe this is a mistake, please contact an administrator."})
@@ -342,27 +343,22 @@ def process_signup():
         logger.exception("[SIGNUP] blacklist check error:")
         return jsonify({"error": "Unable to verify blacklist."})
 
-    # 1.5) Validate phone to see if already in Master List
+    # 2a) Check if phone in Master
     try:
-        val_payload = {"validatePhone": phone}
-        val_resp = requests.post(SCRIPT_URL, json=val_payload, timeout=25)
+        val_resp = requests.post(SCRIPT_URL, json={ "validatePhone": phone }, timeout=25)
         val_json = val_resp.json()
-        # If no error => user is found => block
-        if not val_json.get("error"):
+        if not val_json.get("error"):  
+            # meaning phone is found => block
             return jsonify({"error": "A user with that information already exists, please try logging in."})
         elif val_json["error"] != "userNotRegistered":
-            # Some other error from the script
             return jsonify({"error": val_json["error"]})
     except Exception as e:
         logger.exception("[SIGNUP] phone validate error:")
         return jsonify({"error": "Unable to check existing phone."})
 
-    # 1.6) Use the existing user check (email/phone) if your Apps Script handles it
+    # 2b) Check if user already exists by email/phone, if your script supports it
     check_existing_payload = {
-        "checkExistingUser": {
-            "phone": phone,
-            "email": email
-        }
+        "checkExistingUser": { "phone": phone, "email": email }
     }
     try:
         exists_resp = requests.post(SCRIPT_URL, json=check_existing_payload, timeout=25)
@@ -373,7 +369,7 @@ def process_signup():
         logger.exception("[SIGNUP] existing user check error:")
         return jsonify({"error": "Unable to verify existing user."})
 
-    # 2) Add user to Master List
+    # 3) Add user to Master List
     signup_payload = {
         "addMasterList": {
             "firstName": fname,
@@ -391,9 +387,29 @@ def process_signup():
         logger.exception("[SIGNUP] addMasterList error:")
         return jsonify({"error": "Unable to sign up. Try again later."})
 
-    # 3) If group_phone => updateGroup
-    if group_phone:
-        # group_phone could be multiple phone #s separated by commas, handle as needed:
+    # 4) If no group_phone => we STILL want them in a group alone
+    if not group_phone:
+        # call updateGroup with the same phone as primary & secondary
+        # The script logic will see if phone is already in a group or not, 
+        # if not => create new group. 
+        auto_update_payload = {
+            "updateGroup": {
+                "primaryPhone": phone,
+                "secondaryPhone": phone
+            }
+        }
+        try:
+            grp_resp = requests.post(SCRIPT_URL, json=auto_update_payload, timeout=25)
+            grp_json = grp_resp.json()
+            if grp_json.get("error"):
+                # Not critical, but return error if needed
+                return jsonify({"error": grp_json["error"]})
+        except Exception as e:
+            logger.exception("[SIGNUP] single user group assignment error:")
+            # Not a fatal error => they are in Master but no group
+            pass
+    else:
+        # 5) For each group phone => updateGroup
         gphone_list = [x.strip() for x in group_phone.split(",") if x.strip()]
         for gphone_item in gphone_list:
             gphone_norm = normalize_phone(gphone_item)

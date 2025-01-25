@@ -49,7 +49,6 @@
       margin-top: 10px;
     }
 
-    /* Group section hidden by default; shown if checkbox is checked (kept for reference). */
     .group-section {
       margin-top: 15px; 
       border: 1px solid #ccc; 
@@ -73,9 +72,17 @@
       width: 100%;
       transition: background-color 0.2s ease-in;
     }
-    /* ADDED/UPDATED: darker green on hover, not blue */
+    /* Hover: darker green (not blue) */
     button:hover {
       background-color: #006400; 
+    }
+
+    /* ADDED: Separate style for #back-to-login, or we can reuse the same button:hover */
+    #back-to-login {
+      background-color: #007bff;
+    }
+    #back-to-login:hover {
+      background-color: #0056b3;
     }
 
     /* Spinner style (same as index.html) */
@@ -99,7 +106,6 @@
   <div class="container">
     <h1>Sign Up for Serving Good</h1>
 
-    <!-- The signup form -->
     <form id="signup-form">
       <label for="fname">First Name</label>
       <input type="text" id="fname" name="fname" required />
@@ -113,11 +119,11 @@
       <label for="phone">Phone Number</label>
       <input type="text" id="phone" name="phone" placeholder="(555) 555-5555" required />
 
-      <!-- Improved group message -->
-      <p style="font-weight: bold;">
-        If you plan on shopping with a group, please check the box below and add 
-        your group members' phone numbers. Each shopper is required to have their 
-        own line number. Failure to comply may result in a ban.
+      <!-- NEW: Red group message -->
+      <p style="font-weight: bold; color: red;">
+        If you are shopping with a group, please check the box below and enter 
+        the phone numbers of your group members. Remember, each shopper must have 
+        their own line number. Failure to follow this rule may result in a ban.
       </p>
 
       <label>
@@ -127,8 +133,8 @@
 
       <div class="group-section" id="group-section">
         <div id="group-phones-container">
-          <p style="font-weight: bold;">Add Group Member #1</p>
-          <input type="text" id="group-phone-1" placeholder="Friend's Phone Number" />
+          <p style="font-weight: bold;">Add Group Shopper Phone Number</p>
+          <input type="text" id="group-phone-1" placeholder="Phone Number" />
         </div>
         <!-- Button to add more group members -->
         <button type="button" id="add-group-member" style="background-color: #228B22; margin-top: 5px;">
@@ -139,13 +145,12 @@
       <button type="submit" id="signup-btn">Sign Up</button>
     </form>
 
-    <!-- Now the "Back to Login" button is under Sign Up -->
-    <!-- ADDED/UPDATED: Moved below the form -->
-    <button id="back-to-login" type="button" style="background-color: #007bff;">
+    <!-- "Back to Login" button below form, with its own hover color -->
+    <button id="back-to-login" type="button">
       Back to Login
     </button>
 
-    <!-- Spinner to show while processing -->
+    <!-- Spinner -->
     <div class="spinner" id="loading-spinner"></div>
 
     <!-- Message areas -->
@@ -160,7 +165,7 @@
     const spinner = document.getElementById("loading-spinner");
     const backToLoginBtn = document.getElementById("back-to-login");
 
-    // ADDED/UPDATED: Force show/hide group section with JS on checkbox toggle
+    // Toggle group section with JS
     const toggleGroupCheckbox = document.getElementById("toggle-group");
     const groupSection = document.getElementById("group-section");
     toggleGroupCheckbox.addEventListener("change", () => {
@@ -171,7 +176,7 @@
       }
     });
 
-    // Handle "Back to Login" button click
+    // "Back to Login"
     backToLoginBtn.addEventListener("click", () => {
       window.location.href = "/";
     });
@@ -185,10 +190,10 @@
       groupCount++;
       const labelP = document.createElement("p");
       labelP.style.fontWeight = "bold";
-      labelP.textContent = `Add Group Member #${groupCount}`;
+      labelP.textContent = `Add Group Shopper Phone Number`;
       const input = document.createElement("input");
       input.type = "text";
-      input.placeholder = "Friend's Phone Number";
+      input.placeholder = "Phone Number";
       input.id = `group-phone-${groupCount}`;
       groupPhonesContainer.appendChild(labelP);
       groupPhonesContainer.appendChild(input);
@@ -198,16 +203,14 @@
       e.preventDefault();
       errorDiv.textContent = "";
       successDiv.textContent = "";
-      spinner.style.display = "block";  // show spinner
+      spinner.style.display = "block";
 
       const fname = document.getElementById("fname").value.trim();
       const lname = document.getElementById("lname").value.trim();
       const email = document.getElementById("email").value.trim();
       const phone = document.getElementById("phone").value.trim();
 
-      const toggled = document.getElementById("toggle-group").checked;
-
-      // Collect multiple group phones if toggled
+      const toggled = toggleGroupCheckbox.checked;
       let groupPhone = "";
       if (toggled) {
         const allGroupInputs = groupPhonesContainer.querySelectorAll("input[type='text']");
@@ -217,7 +220,6 @@
             groupNumbers.push(inp.value.trim());
           }
         });
-        // join them into one string (server can handle as needed)
         groupPhone = groupNumbers.join(",");
       }
 
@@ -241,7 +243,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        spinner.style.display = "none"; // hide spinner when response arrives
+        spinner.style.display = "none";
 
         if (!resp.ok) {
           errorDiv.textContent = "A server error occurred. Please try again.";
@@ -253,8 +255,8 @@
           return;
         }
 
-        // success => show message in green
-        successDiv.textContent = "Signup successful! You can now check in when the market is open.";
+        // ADDED: On success => automatically redirect to home
+        window.location.href = "/";
       } catch (err) {
         spinner.style.display = "none";
         errorDiv.textContent = "Error: " + err.message;
