@@ -6,7 +6,6 @@ import requests
 import pytz
 from urllib.parse import quote as url_quote
 
-
 ###############################################################################
 # TOGGLE VERBOSE LOGGING
 ###############################################################################
@@ -67,7 +66,6 @@ def format_date(yyyy_mm_dd):
         return dt.strftime("%B %d, %Y")
     except Exception:
         return yyyy_mm_dd
-
 
 ###############################################################################
 # LANDING PAGE
@@ -131,7 +129,6 @@ def index():
         logger.exception("[INDEX] Exception:")
         return render_template("index.html", error=str(e), reset=reset)
 
-
 ###############################################################################
 # CHECK-IN ROUTE
 ###############################################################################
@@ -157,8 +154,7 @@ def check_in():
             logger.debug(f"[CHECKIN] Validation response: {val_json}")
 
         if val_json.get("error") == "userNotRegistered":
-            # Remove hyperlink:
-            return jsonify({"error": "userNotRegistered"})  # We'll handle the message front-end
+            return jsonify({"error": "userNotRegistered"})
         elif "error" in val_json:
             return jsonify({"error": val_json["error"]})
 
@@ -235,7 +231,6 @@ def check_in():
         logger.exception("[CHECKIN] Exception:")
         return jsonify({"error": "internalError"})
 
-
 ###############################################################################
 # VALIDATE ROUTE
 ###############################################################################
@@ -264,7 +259,6 @@ def validate():
     except Exception as e:
         logger.exception("[VALIDATE] Exception:")
         return jsonify({"error": "internalError"})
-
 
 ###############################################################################
 # FETCH NIL ROUTE
@@ -306,14 +300,12 @@ def get_nil():
         logger.exception("[NIL] Exception:")
         return jsonify({"error": "internalError"})
 
-
 ###############################################################################
 # SIGNUP PAGE (GET)
 ###############################################################################
 @app.route("/signup", methods=["GET"])
 def signup_page():
     return render_template("signup.html")
-
 
 ###############################################################################
 # SIGNUP PROCESS (POST)
@@ -322,6 +314,7 @@ def signup_page():
 def process_signup():
     """
     1) Check if user phone is in Blacklist => if so, error
+    1.5) Check if user already exists (by phone or email) => if so, error
     2) If not => add them to Master List
     3) If groupPhone => do group logic
     """
@@ -347,6 +340,22 @@ def process_signup():
         logger.exception("[SIGNUP] blacklist check error:")
         return jsonify({"error": "Unable to verify blacklist."})
 
+    # 1.5) Check if user already exists by phone or email
+    check_existing_payload = {
+        "checkExistingUser": {
+            "phone": phone,
+            "email": email
+        }
+    }
+    try:
+        exists_resp = requests.post(SCRIPT_URL, json=check_existing_payload, timeout=25)
+        exists_json = exists_resp.json()
+        if exists_json.get("exists"):
+            return jsonify({"error": "A user with that information already exists, please try logging in."})
+    except Exception as e:
+        logger.exception("[SIGNUP] existing user check error:")
+        return jsonify({"error": "Unable to verify existing user."})
+
     # 2) Add user to Master List
     signup_payload = {
         "addMasterList": {
@@ -367,25 +376,30 @@ def process_signup():
 
     # 3) If group_phone => updateGroup
     if group_phone:
-        gphone_norm = normalize_phone(group_phone)
-        if gphone_norm:
-            group_payload = {
-                "updateGroup": {
-                    "primaryPhone": phone,
-                    "secondaryPhone": gphone_norm
-                }
-            }
-            try:
-                group_resp = requests.post(SCRIPT_URL, json=group_payload, timeout=25)
-                group_json = group_resp.json()
-                if group_json.get("error"):
-                    return jsonify({"error": group_json["error"]})
-            except Exception as e:
-                logger.exception("[SIGNUP] group update error:")
-                return jsonify({"error": "Group update failed. But your account was created."})
+        # group_phone could be multiple phone #s separated by commas, handle as needed:
+        # We'll just grab the first one for example:
+        gphone_list = [x.strip() for x in group_phone.split(",") if x.strip()]
+        # If you only want one phone, or more logic, adapt it here:
+        if gphone_list:
+            for gphone_item in gphone_list:
+                gphone_norm = normalize_phone(gphone_item)
+                if gphone_norm:
+                    group_payload = {
+                        "updateGroup": {
+                            "primaryPhone": phone,
+                            "secondaryPhone": gphone_norm
+                        }
+                    }
+                    try:
+                        group_resp = requests.post(SCRIPT_URL, json=group_payload, timeout=25)
+                        group_json = group_resp.json()
+                        if group_json.get("error"):
+                            return jsonify({"error": group_json["error"]})
+                    except Exception as e:
+                        logger.exception("[SIGNUP] group update error:")
+                        return jsonify({"error": "Group update failed. But your account was created."})
 
     return jsonify({"success": True})
-
 
 ###############################################################################
 # MAIN

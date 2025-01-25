@@ -4,40 +4,104 @@
   <meta charset="UTF-8" />
   <title>Serving Good - Sign Up</title>
   <style>
+    /* Match the dimensions from index.html */
     body {
       font-family: Arial, sans-serif;
-      margin: 0; padding: 0;
       background-color: #f9f9f9;
+      margin: 0; 
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
     }
     .container {
-      max-width: 400px; width: 90%;
-      background: white; border-radius: 10px;
+      max-width: 400px; 
+      width: 90%;
+      background: white; 
+      border-radius: 10px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      padding: 20px; text-align: center;
-      margin: 50px auto;
+      padding: 20px; 
+      text-align: center;
+      position: relative;
     }
-    label { display: block; text-align: left; margin-bottom: 5px; }
+    label { 
+      display: block; 
+      text-align: left; 
+      margin-bottom: 5px; 
+    }
     input[type="text"], input[type="email"] {
-      width: 100%; padding: 10px; font-size: 16px;
-      margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px;
+      width: 100%; 
+      padding: 10px; 
+      font-size: 16px;
+      margin-bottom: 10px; 
+      border: 1px solid #ccc; 
+      border-radius: 5px;
     }
-    .error { color: red; font-weight: bold; margin-top: 10px; }
+    .error {
+      color: red; 
+      font-weight: bold; 
+      margin-top: 10px;
+    }
+    .success {
+      color: green; 
+      font-weight: bold; 
+      margin-top: 10px;
+    }
+
+    /* Group section hidden by default; shown if checkbox is checked. */
     .group-section {
-      margin-top: 15px; border: 1px solid #ccc; padding: 10px; display: none;
+      margin-top: 15px; 
+      border: 1px solid #ccc; 
+      padding: 10px; 
+      display: none;
     }
     #toggle-group:checked ~ .group-section {
       display: block;
     }
+
+    /* Hover effect for all buttons */
     button {
-      margin-top: 10px; background-color: green; color: #fff;
-      border: none; padding: 10px 15px; font-size: 16px;
-      border-radius: 5px; cursor: pointer; width: 100%;
+      margin-top: 10px; 
+      background-color: green; 
+      color: #fff;
+      border: none; 
+      padding: 10px 15px; 
+      font-size: 16px;
+      border-radius: 5px; 
+      cursor: pointer; 
+      width: 100%;
+      transition: background-color 0.2s ease-in;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    /* Spinner style (same as index.html) */
+    .spinner {
+      display: none;
+      margin: 20px auto;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Sign Up for Serving Good</h1>
+
+    <!-- "Back to login" button -->
+    <button id="back-to-login" type="button" style="background-color: #007bff;">
+      Back to Login
+    </button>
 
     <form id="signup-form">
       <label for="fname">First Name</label>
@@ -52,11 +116,11 @@
       <label for="phone">Phone Number</label>
       <input type="text" id="phone" name="phone" placeholder="(555) 555-5555" required />
 
+      <!-- Improved group message -->
       <p style="font-weight: bold;">
-        If you are shopping in a group, please toggle below and add your friend's phone number.
-        <span style="color:red; font-size:0.9rem;">
-          (Each shopper must show their own line number. No cutting in line or risk ban.)
-        </span>
+        If you plan on shopping with a group, please check the box below and add 
+        your group members' phone numbers. Each shopper is required to have their 
+        own line number. Failure to comply may result in a ban.
       </p>
 
       <label>
@@ -65,23 +129,62 @@
       </label>
 
       <div class="group-section">
-        <p style="font-weight: bold;">Add Group Member #1</p>
-        <input type="text" id="group-phone-1" placeholder="Friend's Phone Number" />
+        <div id="group-phones-container">
+          <p style="font-weight: bold;">Add Group Member #1</p>
+          <input type="text" id="group-phone-1" placeholder="Friend's Phone Number" />
+        </div>
+        <!-- Button to add more group members -->
+        <button type="button" id="add-group-member" style="background-color: #28a745; margin-top: 5px;">
+          + Add Another
+        </button>
       </div>
 
-      <button type="submit">Sign Up</button>
+      <button type="submit" id="signup-btn">Sign Up</button>
     </form>
 
+    <!-- Spinner to show while processing -->
+    <div class="spinner" id="loading-spinner"></div>
+
+    <!-- Message areas -->
     <div id="error-msg" class="error"></div>
+    <div id="success-msg" class="success"></div>
   </div>
 
   <script>
     const form = document.getElementById("signup-form");
     const errorDiv = document.getElementById("error-msg");
+    const successDiv = document.getElementById("success-msg");
+    const spinner = document.getElementById("loading-spinner");
+    const backToLoginBtn = document.getElementById("back-to-login");
+
+    // Handle "Back to Login" button click
+    backToLoginBtn.addEventListener("click", () => {
+      window.location.href = "/";
+    });
+
+    // Dynamically add more group phone fields
+    const addGroupMemberBtn = document.getElementById("add-group-member");
+    const groupPhonesContainer = document.getElementById("group-phones-container");
+    let groupCount = 1;
+
+    addGroupMemberBtn.addEventListener("click", () => {
+      groupCount++;
+      const labelP = document.createElement("p");
+      labelP.style.fontWeight = "bold";
+      labelP.textContent = `Add Group Member #${groupCount}`;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "Friend's Phone Number";
+      input.id = `group-phone-${groupCount}`;
+      groupPhonesContainer.appendChild(labelP);
+      groupPhonesContainer.appendChild(input);
+    });
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       errorDiv.textContent = "";
+      successDiv.textContent = "";
+      spinner.style.display = "block";  // show spinner
 
       const fname = document.getElementById("fname").value.trim();
       const lname = document.getElementById("lname").value.trim();
@@ -89,12 +192,23 @@
       const phone = document.getElementById("phone").value.trim();
 
       const toggled = document.getElementById("toggle-group").checked;
+
+      // Collect multiple group phones if toggled
       let groupPhone = "";
       if (toggled) {
-        groupPhone = document.getElementById("group-phone-1").value.trim();
+        const allGroupInputs = groupPhonesContainer.querySelectorAll("input[type='text']");
+        const groupNumbers = [];
+        allGroupInputs.forEach(inp => {
+          if (inp.value.trim()) {
+            groupNumbers.push(inp.value.trim());
+          }
+        });
+        // join them into one string (server can handle as needed)
+        groupPhone = groupNumbers.join(",");
       }
 
       if (!fname || !lname || !email || !phone) {
+        spinner.style.display = "none";
         errorDiv.textContent = "Please fill all required fields.";
         return;
       }
@@ -113,6 +227,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
+        spinner.style.display = "none"; // hide spinner when response arrives
+
         if (!resp.ok) {
           errorDiv.textContent = "A server error occurred. Please try again.";
           return;
@@ -122,10 +238,11 @@
           errorDiv.textContent = json.error;
           return;
         }
-        // success => redirect
-        alert("Signup success! You can now check in when the market is open.");
-        window.location.href = "/";
+
+        // success => show message in green
+        successDiv.textContent = "Signup successful! You can now check in when the market is open.";
       } catch (err) {
+        spinner.style.display = "none";
         errorDiv.textContent = "Error: " + err.message;
       }
     });
