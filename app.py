@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 import re
 import requests
 import pytz
+from urllib.parse import quote as url_quote
+
 
 ###############################################################################
 # TOGGLE VERBOSE LOGGING
