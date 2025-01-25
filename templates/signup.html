@@ -16,12 +16,12 @@
       height: 100vh;
     }
     .container {
-      max-width: 400px; 
-      width: 90%;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
       background: white; 
       border-radius: 10px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      padding: 20px; 
       text-align: center;
       position: relative;
     }
@@ -30,13 +30,13 @@
       text-align: left; 
       margin-bottom: 5px; 
     }
-    input[type="text"], input[type="email"] {
-      width: 100%; 
-      padding: 10px; 
+    input[type="text"],
+    input[type="email"] {
+      width: 100%;
+      padding: 8px;
+      margin: 8px 0;
+      box-sizing: border-box;
       font-size: 16px;
-      margin-bottom: 10px; 
-      border: 1px solid #ccc; 
-      border-radius: 5px;
     }
     .error {
       color: red; 
@@ -61,23 +61,52 @@
 
     /* Global button styling */
     button {
-      margin-top: 10px; 
-      background-color: green; 
+      margin-top: 10px;
       color: #fff;
-      border: none; 
-      padding: 10px 15px; 
+      border: none;
+      padding: 10px 15px;
       font-size: 16px;
-      border-radius: 5px; 
-      cursor: pointer; 
+      border-radius: 5px;
+      cursor: pointer;
       width: 100%;
       transition: background-color 0.2s ease-in;
     }
-    /* Hover: darker green (not blue) */
-    button:hover {
-      background-color: #006400; 
+
+    /* Make checkbox bigger */
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-right: 10px;
+      vertical-align: middle;
     }
 
-    /* ADDED: Separate style for #back-to-login, or we can reuse the same button:hover */
+    /* Consistent text sizes */
+    label, p, input::placeholder {
+      font-size: 16px;
+    }
+
+    /* Group shopping message */
+    .group-warning {
+      font-weight: bold;
+    }
+    .group-warning .warning-text {
+      color: red;
+    }
+
+    #add-group-member {
+      background-color: #228B22;
+    }
+    #add-group-member:hover {
+      background-color: #165916;
+    }
+
+    #signup-btn {
+      background-color: green;
+    }
+    #signup-btn:hover {
+      background-color: #006400;
+    }
+
     #back-to-login {
       background-color: #007bff;
     }
@@ -120,10 +149,11 @@
       <input type="text" id="phone" name="phone" placeholder="(555) 555-5555" required />
 
       <!-- NEW: Red group message -->
-      <p style="font-weight: bold; color: red;">
-        If you are shopping with a group, please check the box below and enter 
-        the phone numbers of your group members. Remember, each shopper must have 
-        their own line number. Failure to follow this rule may result in a ban.
+      <p class="group-warning">
+        If you are shopping with a group, please check the box below and enter the phone numbers of your group members. 
+        <span class="warning-text">
+          Remember, each shopper must have their own line number. Failure to follow this rule may result in a ban.
+        </span>
       </p>
 
       <label>
@@ -198,6 +228,16 @@
       groupPhonesContainer.appendChild(labelP);
       groupPhonesContainer.appendChild(input);
     });
+
+    function frontEndNormalizePhone(raw) {
+      if(!raw) return null;
+      const stripped = raw.replace(/[^\d]/g,"");
+      if(stripped.length === 10) return stripped;
+      if(stripped.length === 11 && stripped.startsWith("1")) {
+        return stripped.slice(1);
+      }
+      return null;
+    }
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
