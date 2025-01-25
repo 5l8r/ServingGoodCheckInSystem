@@ -39,18 +39,28 @@
       margin-bottom: 10px; border: 1px solid #ccc;
       border-radius: 5px; box-sizing: border-box;
     }
+
+    /* Global button style */
     button {
-      background-color: #007bff; color: white;
-      border: none; padding: 10px 15px; font-size: 16px;
-      border-radius: 5px; cursor: pointer; width: 100%;
-      margin-top: 10px; transition: background-color 0.2s ease-in;
+      background-color: #007bff; 
+      color: white;
+      border: none; 
+      padding: 10px 15px; 
+      font-size: 16px;
+      border-radius: 5px; 
+      cursor: pointer; 
+      width: 100%;
+      margin-top: 10px;
+      transition: background-color 0.2s ease-in;
     }
     button:hover {
       background-color: #0056b3;
     }
     button:disabled {
-      background-color: #d6d6d6; cursor: not-allowed;
+      background-color: #d6d6d6; 
+      cursor: not-allowed;
     }
+
     .error, .status-message {
       font-weight: bold;
     }
@@ -95,6 +105,14 @@
     }
     #reset-btn:hover {
       background-color: #b52d3a;
+    }
+
+    /* ADDED/UPDATED: Override for the main Sign Up button specifically */
+    #signup-button {
+      background-color: green; /* original color for Sign Up */
+    }
+    #signup-button:hover {
+      background-color: #006400; /* darker green on hover */
     }
   </style>
 </head>
@@ -141,7 +159,7 @@
     </form>
 
     <!-- NEW SIGN UP BUTTON -->
-    <button id="signup-button" style="background-color: green;">
+    <button id="signup-button">
       Sign Up
     </button>
 

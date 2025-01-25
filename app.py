@@ -252,9 +252,10 @@ def validate():
         if "error" in v_data:
             return jsonify({"error": v_data["error"]})
         else:
+            # If there's no error, user is found
             return jsonify({"success": True})
     except requests.exceptions.Timeout:
-        logger.exception("[VALIDATE] Timed out after ~25s in server.")
+        logger.exception("[VALIDATE] Timed out after ~25s in the server.")
         return jsonify({"error": "internalError"})
     except Exception as e:
         logger.exception("[VALIDATE] Exception:")
@@ -314,9 +315,10 @@ def signup_page():
 def process_signup():
     """
     1) Check if user phone is in Blacklist => if so, error
-    1.5) Check if user already exists (by phone or email) => if so, error
-    2) If not => add them to Master List
-    3) If groupPhone => do group logic
+    1.5) Check if user phone is already in Master List => block if found
+    1.6) Check if user already exists by phone/email => block if found
+    2) Add user to Master List
+    3) If group_phone => updateGroup
     """
     data = request.get_json() or {}
     fname = data.get("firstName","").strip()
@@ -340,7 +342,22 @@ def process_signup():
         logger.exception("[SIGNUP] blacklist check error:")
         return jsonify({"error": "Unable to verify blacklist."})
 
-    # 1.5) Check if user already exists by phone or email
+    # 1.5) Validate phone to see if already in Master List
+    try:
+        val_payload = {"validatePhone": phone}
+        val_resp = requests.post(SCRIPT_URL, json=val_payload, timeout=25)
+        val_json = val_resp.json()
+        # If no error => user is found => block
+        if not val_json.get("error"):
+            return jsonify({"error": "A user with that information already exists, please try logging in."})
+        elif val_json["error"] != "userNotRegistered":
+            # Some other error from the script
+            return jsonify({"error": val_json["error"]})
+    except Exception as e:
+        logger.exception("[SIGNUP] phone validate error:")
+        return jsonify({"error": "Unable to check existing phone."})
+
+    # 1.6) Use the existing user check (email/phone) if your Apps Script handles it
     check_existing_payload = {
         "checkExistingUser": {
             "phone": phone,
@@ -377,27 +394,24 @@ def process_signup():
     # 3) If group_phone => updateGroup
     if group_phone:
         # group_phone could be multiple phone #s separated by commas, handle as needed:
-        # We'll just grab the first one for example:
         gphone_list = [x.strip() for x in group_phone.split(",") if x.strip()]
-        # If you only want one phone, or more logic, adapt it here:
-        if gphone_list:
-            for gphone_item in gphone_list:
-                gphone_norm = normalize_phone(gphone_item)
-                if gphone_norm:
-                    group_payload = {
-                        "updateGroup": {
-                            "primaryPhone": phone,
-                            "secondaryPhone": gphone_norm
-                        }
+        for gphone_item in gphone_list:
+            gphone_norm = normalize_phone(gphone_item)
+            if gphone_norm:
+                group_payload = {
+                    "updateGroup": {
+                        "primaryPhone": phone,
+                        "secondaryPhone": gphone_norm
                     }
-                    try:
-                        group_resp = requests.post(SCRIPT_URL, json=group_payload, timeout=25)
-                        group_json = group_resp.json()
-                        if group_json.get("error"):
-                            return jsonify({"error": group_json["error"]})
-                    except Exception as e:
-                        logger.exception("[SIGNUP] group update error:")
-                        return jsonify({"error": "Group update failed. But your account was created."})
+                }
+                try:
+                    group_resp = requests.post(SCRIPT_URL, json=group_payload, timeout=25)
+                    group_json = group_resp.json()
+                    if group_json.get("error"):
+                        return jsonify({"error": group_json["error"]})
+                except Exception as e:
+                    logger.exception("[SIGNUP] group update error:")
+                    return jsonify({"error": "Group update failed. But your account was created."})
 
     return jsonify({"success": True})
 

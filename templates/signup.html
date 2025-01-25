@@ -49,7 +49,7 @@
       margin-top: 10px;
     }
 
-    /* Group section hidden by default; shown if checkbox is checked. */
+    /* Group section hidden by default; shown if checkbox is checked (kept for reference). */
     .group-section {
       margin-top: 15px; 
       border: 1px solid #ccc; 
@@ -60,7 +60,7 @@
       display: block;
     }
 
-    /* Hover effect for all buttons */
+    /* Global button styling */
     button {
       margin-top: 10px; 
       background-color: green; 
@@ -73,8 +73,9 @@
       width: 100%;
       transition: background-color 0.2s ease-in;
     }
+    /* ADDED/UPDATED: darker green on hover, not blue */
     button:hover {
-      background-color: #0056b3;
+      background-color: #006400; 
     }
 
     /* Spinner style (same as index.html) */
@@ -98,11 +99,7 @@
   <div class="container">
     <h1>Sign Up for Serving Good</h1>
 
-    <!-- "Back to login" button -->
-    <button id="back-to-login" type="button" style="background-color: #007bff;">
-      Back to Login
-    </button>
-
+    <!-- The signup form -->
     <form id="signup-form">
       <label for="fname">First Name</label>
       <input type="text" id="fname" name="fname" required />
@@ -128,19 +125,25 @@
         I am shopping in a group.
       </label>
 
-      <div class="group-section">
+      <div class="group-section" id="group-section">
         <div id="group-phones-container">
           <p style="font-weight: bold;">Add Group Member #1</p>
           <input type="text" id="group-phone-1" placeholder="Friend's Phone Number" />
         </div>
         <!-- Button to add more group members -->
-        <button type="button" id="add-group-member" style="background-color: #28a745; margin-top: 5px;">
+        <button type="button" id="add-group-member" style="background-color: #228B22; margin-top: 5px;">
           + Add Another
         </button>
       </div>
 
       <button type="submit" id="signup-btn">Sign Up</button>
     </form>
+
+    <!-- Now the "Back to Login" button is under Sign Up -->
+    <!-- ADDED/UPDATED: Moved below the form -->
+    <button id="back-to-login" type="button" style="background-color: #007bff;">
+      Back to Login
+    </button>
 
     <!-- Spinner to show while processing -->
     <div class="spinner" id="loading-spinner"></div>
@@ -156,6 +159,17 @@
     const successDiv = document.getElementById("success-msg");
     const spinner = document.getElementById("loading-spinner");
     const backToLoginBtn = document.getElementById("back-to-login");
+
+    // ADDED/UPDATED: Force show/hide group section with JS on checkbox toggle
+    const toggleGroupCheckbox = document.getElementById("toggle-group");
+    const groupSection = document.getElementById("group-section");
+    toggleGroupCheckbox.addEventListener("change", () => {
+      if (toggleGroupCheckbox.checked) {
+        groupSection.style.display = "block";
+      } else {
+        groupSection.style.display = "none";
+      }
+    });
 
     // Handle "Back to Login" button click
     backToLoginBtn.addEventListener("click", () => {
