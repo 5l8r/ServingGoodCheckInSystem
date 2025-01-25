@@ -16,7 +16,7 @@
       height: 100vh;
     }
     .container {
-      max-width: 600px;
+      max-width: 400px;  /* Match index.html width */
       margin: 0 auto;
       padding: 20px;
       background: white; 
@@ -61,28 +61,29 @@
 
     /* Global button styling */
     button {
-      margin-top: 10px;
-      color: #fff;
-      border: none;
+      width: 100%;
       padding: 10px 15px;
+      margin-top: 10px;
       font-size: 16px;
+      border: none;
       border-radius: 5px;
       cursor: pointer;
-      width: 100%;
+      color: white;
       transition: background-color 0.2s ease-in;
     }
 
-    /* Make checkbox bigger */
+    /* Make checkbox bigger but not too big */
     input[type="checkbox"] {
-      width: 20px;
-      height: 20px;
-      margin-right: 10px;
+      width: 18px;
+      height: 18px;
+      margin-right: 8px;
       vertical-align: middle;
     }
 
-    /* Consistent text sizes */
-    label, p, input::placeholder {
+    /* Consistent text sizes with index.html */
+    label, p {
       font-size: 16px;
+      margin: 8px 0;
     }
 
     /* Group shopping message */
