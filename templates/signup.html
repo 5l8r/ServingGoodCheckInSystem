@@ -215,12 +215,35 @@
       if (toggled) {
         const allGroupInputs = groupPhonesContainer.querySelectorAll("input[type='text']");
         const groupNumbers = [];
-        allGroupInputs.forEach(inp => {
-          if (inp.value.trim()) {
-            groupNumbers.push(inp.value.trim());
+        let hasInvalidNumber = false;
+
+        // Validate each group phone number
+        for (const inp of allGroupInputs) {
+          const rawNum = inp.value.trim();
+          if (rawNum) {
+            const normalized = frontEndNormalizePhone(rawNum);
+            if (!normalized) {
+              hasInvalidNumber = true;
+              break;
+            }
+            if (normalized === frontEndNormalizePhone(phone)) {
+              errorDiv.textContent = "You cannot add your own phone number as a group member.";
+              spinner.style.display = "none";
+              return;
+            }
+            groupNumbers.push(normalized);
           }
-        });
-        groupPhone = groupNumbers.join(",");
+        }
+
+        if (hasInvalidNumber) {
+          errorDiv.textContent = "One or more group phone numbers are invalid.";
+          spinner.style.display = "none";
+          return;
+        }
+
+        // Remove duplicates
+        const uniqueNumbers = [...new Set(groupNumbers)];
+        groupPhone = uniqueNumbers.join(",");
       }
 
       if (!fname || !lname || !email || !phone) {
@@ -229,11 +252,18 @@
         return;
       }
 
+      const normalizedPhone = frontEndNormalizePhone(phone);
+      if (!normalizedPhone) {
+        spinner.style.display = "none";
+        errorDiv.textContent = "Invalid phone number format.";
+        return;
+      }
+
       const payload = {
         firstName: fname,
         lastName: lname,
         email: email,
-        phone: phone,
+        phone: normalizedPhone,
         groupPhone: groupPhone
       };
 
