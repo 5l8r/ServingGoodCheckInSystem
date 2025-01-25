@@ -7,6 +7,7 @@ import pytz
 import os
 from urllib.parse import quote as url_quote
 from dotenv import load_dotenv
+import time
 
 ###############################################################################
 # TOGGLE VERBOSE LOGGING
@@ -333,43 +334,21 @@ def process_signup():
     if not phone or not fname or not lname or not email:
         return jsonify({"error": "Please provide all required fields."})
 
-    # 1) Check Blacklist
+    # 1) Check Blacklist with shorter timeout
     try:
-        black_resp = requests.post(SCRIPT_URL, json={ "checkBlacklist": phone }, timeout=25)
+        black_resp = requests.post(SCRIPT_URL, json={"checkBlacklist": phone}, timeout=10)
         black_json = black_resp.json()
         if black_json.get("banned"):
-            return jsonify({"error": "Sorry, but you have been banned from Serving Good's Alpine market. If you believe this is a mistake, please contact an administrator."})
+            return jsonify({
+                "error": "Sorry, but you have been banned from Serving Good's Alpine market. If you believe this is a mistake, please contact an administrator."
+            })
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Server is busy. Please try again in a few moments."})
     except Exception as e:
         logger.exception("[SIGNUP] blacklist check error:")
-        return jsonify({"error": "Unable to verify blacklist."})
+        return jsonify({"error": "Unable to verify registration status."})
 
-    # 2a) Check if phone in Master
-    try:
-        val_resp = requests.post(SCRIPT_URL, json={ "validatePhone": phone }, timeout=25)
-        val_json = val_resp.json()
-        if not val_json.get("error"):  
-            # meaning phone is found => block
-            return jsonify({"error": "A user with that information already exists, please try logging in."})
-        elif val_json["error"] != "userNotRegistered":
-            return jsonify({"error": val_json["error"]})
-    except Exception as e:
-        logger.exception("[SIGNUP] phone validate error:")
-        return jsonify({"error": "Unable to check existing phone."})
-
-    # 2b) Check if user already exists by email/phone, if your script supports it
-    check_existing_payload = {
-        "checkExistingUser": { "phone": phone, "email": email }
-    }
-    try:
-        exists_resp = requests.post(SCRIPT_URL, json=check_existing_payload, timeout=25)
-        exists_json = exists_resp.json()
-        if exists_json.get("exists"):
-            return jsonify({"error": "A user with that information already exists, please try logging in."})
-    except Exception as e:
-        logger.exception("[SIGNUP] existing user check error:")
-        return jsonify({"error": "Unable to verify existing user."})
-
-    # 3) Add user to Master List
+    # 2) Add to Master List with retry logic
     signup_payload = {
         "addMasterList": {
             "firstName": fname,
@@ -378,20 +357,26 @@ def process_signup():
             "phone": phone
         }
     }
-    try:
-        add_resp = requests.post(SCRIPT_URL, json=signup_payload, timeout=25)
-        add_json = add_resp.json()
-        if add_json.get("error"):
-            return jsonify({"error": add_json["error"]})
-    except Exception as e:
-        logger.exception("[SIGNUP] addMasterList error:")
-        return jsonify({"error": "Unable to sign up. Try again later."})
 
-    # 4) If no group_phone => we STILL want them in a group alone
+    retry_count = 0
+    while retry_count < 2:
+        try:
+            add_resp = requests.post(SCRIPT_URL, json=signup_payload, timeout=15)
+            add_json = add_resp.json()
+            if add_json.get("error"):
+                return jsonify({"error": add_json["error"]})
+            break
+        except requests.exceptions.Timeout:
+            retry_count += 1
+            if retry_count == 2:
+                return jsonify({"error": "Server is busy. Please try again in a few moments."})
+            time.sleep(1)  # Brief pause before retry
+        except Exception as e:
+            logger.exception("[SIGNUP] addMasterList error:")
+            return jsonify({"error": "Unable to complete registration. Please try again."})
+
+    # 3) Handle group assignment
     if not group_phone:
-        # call updateGroup with the same phone as primary & secondary
-        # The script logic will see if phone is already in a group or not, 
-        # if not => create new group. 
         auto_update_payload = {
             "updateGroup": {
                 "primaryPhone": phone,
@@ -399,17 +384,13 @@ def process_signup():
             }
         }
         try:
-            grp_resp = requests.post(SCRIPT_URL, json=auto_update_payload, timeout=25)
+            grp_resp = requests.post(SCRIPT_URL, json=auto_update_payload, timeout=15)
             grp_json = grp_resp.json()
             if grp_json.get("error"):
-                # Not critical, but return error if needed
-                return jsonify({"error": grp_json["error"]})
+                logger.error(f"Group assignment failed: {grp_json['error']}")
         except Exception as e:
             logger.exception("[SIGNUP] single user group assignment error:")
-            # Not a fatal error => they are in Master but no group
-            pass
     else:
-        # 5) For each group phone => updateGroup
         gphone_list = [x.strip() for x in group_phone.split(",") if x.strip()]
         for gphone_item in gphone_list:
             gphone_norm = normalize_phone(gphone_item)
@@ -421,13 +402,12 @@ def process_signup():
                     }
                 }
                 try:
-                    group_resp = requests.post(SCRIPT_URL, json=group_payload, timeout=25)
+                    group_resp = requests.post(SCRIPT_URL, json=group_payload, timeout=15)
                     group_json = group_resp.json()
                     if group_json.get("error"):
-                        return jsonify({"error": group_json["error"]})
+                        logger.error(f"Group update failed: {group_json['error']}")
                 except Exception as e:
                     logger.exception("[SIGNUP] group update error:")
-                    return jsonify({"error": "Group update failed. But your account was created."})
 
     return jsonify({"success": True})
 
