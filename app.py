@@ -329,46 +329,26 @@ def process_signup():
 
     # Check if user already exists
     try:
-        check_existing = requests.post(SCRIPT_URL, 
-            json={"addMasterList": {"phone": phone}}, 
+        add_resp = requests.post(SCRIPT_URL, 
+            json={"addMasterList": {
+                "firstName": fname,
+                "lastName": lname,
+                "email": email,
+                "phone": phone
+            }}, 
             timeout=10
         )
-        existing_json = check_existing.json()
-        if existing_json.get("existing"):
-            return jsonify({"error": "This phone number is already registered."})
+        add_json = add_resp.json()
+        
+        if add_json.get("error"):
+            return jsonify({"error": add_json["error"]})
+            
     except Exception as e:
         logger.exception("[SIGNUP] existing check error:")
         return jsonify({"error": "Unable to verify registration status."})
 
-    # Check Blacklist
-    try:
-        black_resp = requests.post(SCRIPT_URL, json={"checkBlacklist": phone}, timeout=10)
-        black_json = black_resp.json()
-        if black_json.get("banned"):
-            return jsonify({
-                "error": "Sorry, but you have been banned from Serving Good's Alpine market."
-            })
-    except Exception as e:
-        logger.exception("[SIGNUP] blacklist check error:")
-        return jsonify({"error": "Unable to verify registration status."})
-
-    # Add to Master List
-    signup_payload = {
-        "addMasterList": {
-            "firstName": fname,
-            "lastName": lname,
-            "email": email,
-            "phone": phone
-        }
-    }
-
-    try:
-        add_resp = requests.post(SCRIPT_URL, json=signup_payload, timeout=15)
-        add_json = add_resp.json()
-        if add_json.get("error"):
-            return jsonify({"error": add_json["error"]})
-    except Exception as e:
-        logger.exception("[SIGNUP] addMasterList error:")
+    # Only proceed if user doesn't exist
+    if not add_json.get("success"):
         return jsonify({"error": "Unable to complete registration."})
 
     # Handle group assignment
