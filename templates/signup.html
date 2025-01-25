@@ -16,7 +16,7 @@
       height: 100vh;
     }
     .container {
-      max-width: 400px;  /* Match index.html width */
+      max-width: 400px;
       margin: 0 auto;
       padding: 20px;
       background: white; 
@@ -34,9 +34,11 @@
     input[type="email"] {
       width: 100%;
       padding: 8px;
-      margin: 8px 0;
+      margin: 4px 0 12px 0;  /* Reduced spacing between label and next field */
       box-sizing: border-box;
       font-size: 16px;
+      border: 1px solid #ccc;  /* Lighter border color matching index.html */
+      border-radius: 4px;
     }
     .error {
       color: red; 
@@ -83,12 +85,14 @@
     /* Consistent text sizes with index.html */
     label, p {
       font-size: 16px;
-      margin: 8px 0;
+      margin: 0;  /* Remove default margins */
+      display: block;
     }
 
     /* Group shopping message */
     .group-warning {
       font-weight: bold;
+      margin: 16px 0;
     }
     .group-warning .warning-text {
       color: red;
