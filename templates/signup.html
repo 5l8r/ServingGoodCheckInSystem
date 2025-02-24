@@ -34,10 +34,10 @@
     input[type="email"] {
       width: 100%;
       padding: 8px;
-      margin: 4px 0 12px 0;  /* Reduced spacing between label and next field */
+      margin: 4px 0 12px 0;
       box-sizing: border-box;
       font-size: 16px;
-      border: 1px solid #ccc;  /* Lighter border color matching index.html */
+      border: 1px solid #ccc;
       border-radius: 4px;
     }
     .error {
@@ -50,16 +50,15 @@
       font-weight: bold; 
       margin-top: 10px;
     }
-
     .group-section {
       margin-top: 15px;
       padding: 10px;
       display: none;
     }
+    /* When checkbox is checked, show group-section */
     #toggle-group:checked ~ .group-section {
       display: block;
     }
-
     /* Global button styling */
     button {
       width: 100%;
@@ -72,15 +71,6 @@
       color: white;
       transition: background-color 0.2s ease-in;
     }
-
-    /* Add Group Member Button */
-    #add-group-member {
-      background-color: #228B22;
-    }
-    #add-group-member:hover {
-      background-color: #1a6b1a;
-    }
-
     /* Sign Up Button */
     #signup-btn {
       background-color: #008000;
@@ -88,7 +78,6 @@
     #signup-btn:hover {
       background-color: #006000;
     }
-
     /* Back to Login Button */
     #back-to-login {
       background-color: #007bff;
@@ -96,22 +85,18 @@
     #back-to-login:hover {
       background-color: #0056b3;
     }
-
-    /* Make checkbox bigger but not too big */
+    /* Make checkbox bigger */
     input[type="checkbox"] {
       width: 18px;
       height: 18px;
       margin-right: 8px;
       vertical-align: middle;
     }
-
-    /* Consistent text sizes with index.html */
     label, p {
       font-size: 16px;
-      margin: 0;  /* Remove default margins */
+      margin: 0;
       display: block;
     }
-
     /* Group shopping message */
     .group-warning {
       font-weight: bold;
@@ -120,8 +105,7 @@
     .group-warning .warning-text {
       color: red;
     }
-
-    /* Spinner style (same as index.html) */
+    /* Spinner style */
     .spinner {
       display: none;
       margin: 20px auto;
@@ -136,15 +120,11 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-
-    /* Add this to your existing styles */
     form label {
       font-weight: bold;
       display: block;
       margin-bottom: 4px;
     }
-
-    /* Success message styling */
     #success-div {
       color: #008000;
       font-weight: bold;
@@ -155,171 +135,120 @@
 <body>
   <div class="container">
     <h1>Sign Up for Serving Good</h1>
-
     <form id="signup-form">
       <label for="fname">First Name</label>
       <input type="text" id="fname" name="fname" required />
-
+      
       <label for="lname">Last Name</label>
       <input type="text" id="lname" name="lname" required />
-
+      
       <label for="email">Email</label>
       <input type="email" id="email" name="email" required />
-
+      
       <label for="phone">Phone Number</label>
       <input type="text" id="phone" name="phone" placeholder="(555) 555-5555" required />
-
-      <!-- NEW: Red group message -->
+      
+      <!-- Group shopping instructions -->
       <p class="group-warning">
-        If you are shopping with a group, please check the box below and enter the phone numbers of your group members. 
+        If you are shopping with a group, please check the box below and enter the phone number of your group member.
         <span class="warning-text">
           Remember, each shopper must have their own line number. Failure to follow this rule may result in a ban.
         </span>
       </p>
-
+      
       <label>
         <input type="checkbox" id="toggle-group" />
         I am shopping in a group.
       </label>
-
+      
+      <!-- Single group member field (no add button) -->
       <div class="group-section" id="group-section">
-        <div id="group-phones-container">
-          <p style="font-weight: bold;">Add Group Shopper Phone Number</p>
-          <input type="text" id="group-phone-1" placeholder="Phone Number" />
-        </div>
-        <!-- Button to add more group members -->
-        <button type="button" id="add-group-member" style="background-color: #228B22; margin-top: 5px;">
-          + Add Another
-        </button>
+        <p style="font-weight: bold;">Group Shopper Phone Number</p>
+        <input type="text" id="group-phone" placeholder="Phone Number" />
       </div>
-
+      
       <button type="submit" id="signup-btn">Sign Up</button>
     </form>
-
-    <!-- "Back to Login" button below form, with its own hover color -->
-    <button id="back-to-login" type="button">
-      Back to Login
-    </button>
-
-    <!-- Spinner -->
+    
+    <button id="back-to-login" type="button">Back to Login</button>
+    
     <div class="spinner" id="loading-spinner"></div>
-
-    <!-- Message areas -->
     <div id="error-msg" class="error"></div>
     <div id="success-msg" class="success"></div>
   </div>
-
+  
   <script>
     const form = document.getElementById("signup-form");
     const errorDiv = document.getElementById("error-msg");
     const successDiv = document.getElementById("success-msg");
     const spinner = document.getElementById("loading-spinner");
     const backToLoginBtn = document.getElementById("back-to-login");
-
-    // Toggle group section with JS
+    
+    // Toggle the group section automatically based on the checkbox.
     const toggleGroupCheckbox = document.getElementById("toggle-group");
     const groupSection = document.getElementById("group-section");
     toggleGroupCheckbox.addEventListener("change", () => {
-      if (toggleGroupCheckbox.checked) {
-        groupSection.style.display = "block";
-      } else {
-        groupSection.style.display = "none";
-      }
+      groupSection.style.display = toggleGroupCheckbox.checked ? "block" : "none";
     });
-
-    // "Back to Login"
+    
+    // "Back to Login" button action.
     backToLoginBtn.addEventListener("click", () => {
       window.location.href = "/";
     });
-
-    // Dynamically add more group phone fields
-    const addGroupMemberBtn = document.getElementById("add-group-member");
-    const groupPhonesContainer = document.getElementById("group-phones-container");
-    let groupCount = 1;
-
-    addGroupMemberBtn.addEventListener("click", () => {
-      groupCount++;
-      const labelP = document.createElement("p");
-      labelP.style.fontWeight = "bold";
-      labelP.textContent = `Add Group Shopper Phone Number`;
-      const input = document.createElement("input");
-      input.type = "text";
-      input.placeholder = "Phone Number";
-      input.id = `group-phone-${groupCount}`;
-      groupPhonesContainer.appendChild(labelP);
-      groupPhonesContainer.appendChild(input);
-    });
-
+    
     function frontEndNormalizePhone(raw) {
-      if(!raw) return null;
-      const stripped = raw.replace(/[^\d]/g,"");
-      if(stripped.length === 10) return stripped;
-      if(stripped.length === 11 && stripped.startsWith("1")) {
+      if (!raw) return null;
+      const stripped = raw.replace(/[^\d]/g, "");
+      if (stripped.length === 10) return stripped;
+      if (stripped.length === 11 && stripped.startsWith("1")) {
         return stripped.slice(1);
       }
       return null;
     }
-
+    
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       errorDiv.textContent = "";
       successDiv.textContent = "";
       spinner.style.display = "block";
-
+      
       const fname = document.getElementById("fname").value.trim();
       const lname = document.getElementById("lname").value.trim();
       const email = document.getElementById("email").value.trim();
       const phone = document.getElementById("phone").value.trim();
-
-      const toggled = toggleGroupCheckbox.checked;
+      
       let groupPhone = "";
-      if (toggled) {
-        const allGroupInputs = groupPhonesContainer.querySelectorAll("input[type='text']");
-        const groupNumbers = [];
-        let hasInvalidNumber = false;
-
-        // Validate each group phone number
-        for (const inp of allGroupInputs) {
-          const rawNum = inp.value.trim();
-          if (rawNum) {
-            const normalized = frontEndNormalizePhone(rawNum);
-            if (!normalized) {
-              hasInvalidNumber = true;
-              break;
-            }
-            if (normalized === frontEndNormalizePhone(phone)) {
-              errorDiv.textContent = "You cannot add your own phone number as a group member.";
-              spinner.style.display = "none";
-              return;
-            }
-            groupNumbers.push(normalized);
+      if (toggleGroupCheckbox.checked) {
+        const gp = document.getElementById("group-phone").value.trim();
+        if (gp) {
+          const normalized = frontEndNormalizePhone(gp);
+          if (!normalized) {
+            errorDiv.textContent = "Invalid group phone number format.";
+            spinner.style.display = "none";
+            return;
           }
+          if (normalized === frontEndNormalizePhone(phone)) {
+            errorDiv.textContent = "You cannot add your own phone number as a group member.";
+            spinner.style.display = "none";
+            return;
+          }
+          groupPhone = normalized;
         }
-
-        if (hasInvalidNumber) {
-          errorDiv.textContent = "One or more group phone numbers are invalid.";
-          spinner.style.display = "none";
-          return;
-        }
-
-        // Remove duplicates
-        const uniqueNumbers = [...new Set(groupNumbers)];
-        groupPhone = uniqueNumbers.join(",");
       }
-
+      
       if (!fname || !lname || !email || !phone) {
         spinner.style.display = "none";
         errorDiv.textContent = "Please fill all required fields.";
         return;
       }
-
+      
       const normalizedPhone = frontEndNormalizePhone(phone);
       if (!normalizedPhone) {
         spinner.style.display = "none";
         errorDiv.textContent = "Invalid phone number format.";
         return;
       }
-
+      
       const payload = {
         firstName: fname,
         lastName: lname,
@@ -327,7 +256,7 @@
         phone: normalizedPhone,
         groupPhone: groupPhone
       };
-
+      
       try {
         const resp = await fetch("/signup", {
           method: "POST",
@@ -335,14 +264,13 @@
           body: JSON.stringify(payload)
         });
         spinner.style.display = "none";
-
+        
         const json = await resp.json();
         if (json.error) {
           errorDiv.textContent = json.error;
           return;
         }
-
-        // Success message and delayed redirect
+        
         successDiv.textContent = "Successfully signed up! Redirecting...";
         setTimeout(() => {
           window.location.href = "/";
