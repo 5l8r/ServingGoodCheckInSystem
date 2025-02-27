@@ -327,7 +327,7 @@ def process_signup():
     if not phone or not fname or not lname or not email:
         return jsonify({"error": "Please provide all required fields."})
 
-    # First, perform group assignment.
+    # First: Attempt group assignment.
     if not secondary_phone:
         try:
             grp_resp = requests.post(
@@ -343,7 +343,6 @@ def process_signup():
             return jsonify({"error": "Unable to complete registration."})
     else:
         success = True
-        # Allow multiple secondary numbers (comma‐separated)
         for sp in [x.strip() for x in secondary_phone.split(",") if x.strip()]:
             sp_norm = normalize_phone(sp)
             if sp_norm:
@@ -365,7 +364,7 @@ def process_signup():
         if not success:
             return jsonify({"error": "Unable to complete group registration."})
 
-    # Now check if the user already exists in the master list.
+    # Second: Validate whether user already exists.
     try:
         val_resp = requests.post(
             SCRIPT_URL,
@@ -377,7 +376,7 @@ def process_signup():
         logger.exception("[SIGNUP] validation error:")
         return jsonify({"error": "Unable to verify registration status."})
 
-    # If not registered, add the master record.
+    # If not found, add the master record.
     if val_json.get("error") == "userNotRegistered":
         try:
             add_resp = requests.post(
@@ -396,9 +395,10 @@ def process_signup():
         except Exception as e:
             logger.exception("[SIGNUP] add record error:")
             return jsonify({"error": "Unable to complete registration."})
-    # If already registered, do nothing (or update details if needed)
+    # Else, if already registered, you might choose to update details or simply ignore.
 
     return jsonify({"success": True})
+
 
 ###############################################################################
 # MAIN
