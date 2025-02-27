@@ -317,12 +317,11 @@ def signup_page():
 @app.route("/signup", methods=["POST"])
 def process_signup():
     data = request.get_json() or {}
-    # Use the new key names:
     fname = data.get("firstName", "").strip()
     lname = data.get("lastName", "").strip()
     email = data.get("email", "").strip()
-    primary_phone = data.get("primaryPhone", "").strip()  # changed from "phone"
-    secondary_phone = data.get("secondaryPhone", "").strip()  # changed from "groupPhone"
+    primary_phone = data.get("primaryPhone", "").strip()  # new key name
+    secondary_phone = data.get("secondaryPhone", "").strip()  # new key name
 
     phone = normalize_phone(primary_phone)
     if not phone or not fname or not lname or not email:
@@ -336,8 +335,9 @@ def process_signup():
                 "firstName": fname,
                 "lastName": lname,
                 "email": email,
-                "primaryPhone": phone  # using primaryPhone
+                "primaryPhone": phone
             }},
+            timeout=10
         )
         add_json = add_resp.json()
         if add_json.get("error"):
@@ -346,22 +346,19 @@ def process_signup():
         logger.exception("[SIGNUP] existing check error:")
         return jsonify({"error": "Unable to verify registration status."})
 
-    # Only proceed if user doesn't exist
     if not add_json.get("success"):
         return jsonify({"error": "Unable to complete registration."})
 
-    # Handle group assignment:
-    # (If no secondary phone is provided, call updateGroup with only primaryPhone.)
+    # Handle group assignment.
     if not secondary_phone:
         try:
             grp_resp = requests.post(
                 SCRIPT_URL,
-                json={"updateGroup": {"primaryPhone": phone}},  # no secondaryPhone key
+                json={"updateGroup": {"primaryPhone": phone}},  # no secondaryPhone key sent
                 timeout=15
             )
             grp_json = grp_resp.json()
             if grp_json.get("error"):
-                # Rollback the master list entry
                 rollback_payload = {"removeMasterList": {"primaryPhone": phone}}
                 requests.post(SCRIPT_URL, json=rollback_payload, timeout=10)
                 return jsonify({"error": grp_json["error"]})
@@ -396,6 +393,7 @@ def process_signup():
             return jsonify({"error": "Unable to complete group registration."})
 
     return jsonify({"success": True})
+
 
 ###############################################################################
 # MAIN
