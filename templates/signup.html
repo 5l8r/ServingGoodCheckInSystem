@@ -249,6 +249,7 @@
         return;
       }
       
+      // Build the payload exactly as expected by your backend.
       const payload = {
         firstName: fname,
         lastName: lname,
@@ -256,6 +257,8 @@
         phone: normalizedPhone,
         groupPhone: groupPhone
       };
+      
+      logDebug("Payload to send:", payload);
       
       try {
         const resp = await fetch("/signup", {
@@ -265,7 +268,17 @@
         });
         spinner.style.display = "none";
         
-        const json = await resp.json();
+        // Attempt to parse response as JSON. If it fails, show the raw response.
+        let json;
+        try {
+          json = await resp.json();
+        } catch (parseError) {
+          const textResp = await resp.text();
+          errorDiv.textContent = "Server returned non-JSON: " + textResp;
+          return;
+        }
+        
+        logDebug("Response from /signup:", json);
         if (json.error) {
           errorDiv.textContent = json.error;
           return;
@@ -280,6 +293,11 @@
         errorDiv.textContent = "Error: " + err.message;
       }
     });
+    
+    // Simple client-side logging function.
+    function logDebug(...args) {
+      console.log(...args);
+    }
   </script>
 </body>
 </html>
