@@ -314,6 +314,7 @@ def signup_page():
 ###############################################################################
 # SIGNUP PROCESS (POST)
 ###############################################################################
+# In your /signup route in app.py:
 @app.route("/signup", methods=["POST"])
 def process_signup():
     data = request.get_json() or {}
@@ -327,77 +328,26 @@ def process_signup():
     if not phone or not fname or not lname or not email:
         return jsonify({"error": "Please provide all required fields."})
 
-    # First: Attempt group assignment.
-    if not secondary_phone:
-        try:
-            grp_resp = requests.post(
-                SCRIPT_URL,
-                json={"updateGroup": {"primaryPhone": phone}},
-                timeout=15
-            )
-            grp_json = grp_resp.json()
-            if grp_json.get("error"):
-                return jsonify({"error": grp_json["error"]})
-        except Exception as e:
-            logger.exception("[SIGNUP] group assignment error:")
-            return jsonify({"error": "Unable to complete registration."})
-    else:
-        success = True
-        for sp in [x.strip() for x in secondary_phone.split(",") if x.strip()]:
-            sp_norm = normalize_phone(sp)
-            if sp_norm:
-                try:
-                    group_resp = requests.post(
-                        SCRIPT_URL,
-                        json={"updateGroup": {
-                            "primaryPhone": phone,
-                            "secondaryPhone": sp_norm
-                        }},
-                        timeout=15
-                    )
-                    if group_resp.json().get("error"):
-                        success = False
-                        break
-                except Exception:
-                    success = False
-                    break
-        if not success:
-            return jsonify({"error": "Unable to complete group registration."})
-
-    # Second: Validate whether user already exists.
+    # Build payload to include all signup data and a new key 'signup': true.
+    payload = {
+        "signup": True,  # This tells Apps Script to use processSignup.
+        "firstName": fname,
+        "lastName": lname,
+        "email": email,
+        "primaryPhone": phone,
+        "secondaryPhone": secondary_phone
+    }
     try:
-        val_resp = requests.post(
-            SCRIPT_URL,
-            json={"validatePhone": phone},
-            timeout=10
-        )
-        val_json = val_resp.json()
+        resp = requests.post(SCRIPT_URL, json=payload, timeout=15)
+        json_data = resp.json()
+        if json_data.get("error"):
+            return jsonify({"error": json_data["error"]})
     except Exception as e:
-        logger.exception("[SIGNUP] validation error:")
-        return jsonify({"error": "Unable to verify registration status."})
-
-    # If not found, add the master record.
-    if val_json.get("error") == "userNotRegistered":
-        try:
-            add_resp = requests.post(
-                SCRIPT_URL,
-                json={"addMasterList": {
-                    "firstName": fname,
-                    "lastName": lname,
-                    "email": email,
-                    "primaryPhone": phone
-                }},
-                timeout=10
-            )
-            add_json = add_resp.json()
-            if add_json.get("error"):
-                return jsonify({"error": add_json["error"]})
-        except Exception as e:
-            logger.exception("[SIGNUP] add record error:")
-            return jsonify({"error": "Unable to complete registration."})
-    # Else, if already registered, you might choose to update details or simply ignore.
-
+        logger.exception("[SIGNUP] signup error:")
+        return jsonify({"error": "Unable to complete registration."})
+    
     return jsonify({"success": True})
+
 
 
 ###############################################################################
