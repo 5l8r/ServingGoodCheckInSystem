@@ -176,13 +176,12 @@
     <div id="error-msg" class="error"></div>
     <div id="success-msg" class="success"></div>
   </div>
-  
   <script>
     // Helper function for logging (uses console.log)
     function logDebug(...args) {
       console.log(...args);
     }
-
+  
     // Normalize phone on the client side
     function frontEndNormalizePhone(raw) {
       if (!raw) return null;
@@ -193,37 +192,37 @@
       }
       return null;
     }
-
+  
     // Toggle the group section based on checkbox
     const toggleGroupCheckbox = document.getElementById("toggle-group");
     const groupSection = document.getElementById("group-section");
     toggleGroupCheckbox.addEventListener("change", () => {
       groupSection.style.display = toggleGroupCheckbox.checked ? "block" : "none";
     });
-
+  
     // "Back to Check-In" button action
     const backToLoginBtn = document.getElementById("back-to-login");
     backToLoginBtn.addEventListener("click", () => {
       window.location.href = "/";
     });
-
+  
     // Form submission handler
     const form = document.getElementById("signup-form");
     const errorDiv = document.getElementById("error-msg");
     const successDiv = document.getElementById("success-msg");
     const spinner = document.getElementById("loading-spinner");
-
+  
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       errorDiv.textContent = "";
       successDiv.textContent = "";
       spinner.style.display = "block";
-
+  
       const fname = document.getElementById("fname").value.trim();
       const lname = document.getElementById("lname").value.trim();
       const email = document.getElementById("email").value.trim();
       const phone = document.getElementById("phone").value.trim();
-
+  
       let groupPhone = "";
       if (toggleGroupCheckbox.checked) {
         const gp = document.getElementById("group-phone").value.trim();
@@ -242,20 +241,20 @@
           groupPhone = normalized;
         }
       }
-
+  
       if (!fname || !lname || !email || !phone) {
         spinner.style.display = "none";
         errorDiv.textContent = "Please fill all required fields.";
         return;
       }
-
+  
       const normalizedPhone = frontEndNormalizePhone(phone);
       if (!normalizedPhone) {
         spinner.style.display = "none";
         errorDiv.textContent = "Invalid phone number format.";
         return;
       }
-
+  
       // Build the payload exactly as expected by your backend.
       const payload = {
         firstName: fname,
@@ -264,9 +263,9 @@
         phone: normalizedPhone,
         groupPhone: groupPhone
       };
-
+  
       logDebug("Payload to send:", payload);
-
+  
       try {
         const resp = await fetch("/signup", {
           method: "POST",
@@ -274,20 +273,20 @@
           body: JSON.stringify(payload)
         });
         spinner.style.display = "none";
-
-        // Clone the response so we can read it safely.
+  
+        // Clone the response BEFORE reading it
+        const respClone = resp.clone();
         let json;
         try {
           json = await resp.json();
         } catch (parseError) {
-          // If JSON parsing fails, use the clone to get the raw text.
-          const cloneResp = resp.clone();
-          const textResp = await cloneResp.text();
+          const textResp = await respClone.text();
           errorDiv.textContent = "Server returned invalid JSON: " + textResp;
           return;
         }
-
+  
         logDebug("Response from /signup:", json);
+  
         if (json.error) {
           errorDiv.textContent = json.error;
           return;
