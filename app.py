@@ -317,82 +317,81 @@ def signup_page():
 @app.route("/signup", methods=["POST"])
 def process_signup():
     data = request.get_json() or {}
-    fname = data.get("firstName","").strip()
-    lname = data.get("lastName","").strip()
-    email = data.get("email","").strip()
-    raw_phone = data.get("phone","").strip()
-    group_phone = data.get("groupPhone","").strip()
+    fname = data.get("firstName", "").strip()
+    lname = data.get("lastName", "").strip()
+    email = data.get("email", "").strip()
+    # Use the new key names: primaryPhone and secondaryPhone
+    raw_phone = data.get("primaryPhone", "").strip()
+    secondary_phone = data.get("secondaryPhone", "").strip()
 
     phone = normalize_phone(raw_phone)
     if not phone or not fname or not lname or not email:
         return jsonify({"error": "Please provide all required fields."})
 
-    # Check if user already exists
+    # Check if user already exists in Master List
     try:
-        add_resp = requests.post(SCRIPT_URL, 
-            json={"addMasterList": {
-                "firstName": fname,
-                "lastName": lname,
-                "email": email,
-                "phone": phone
-            }}, 
+        add_resp = requests.post(
+            SCRIPT_URL,
+            json={
+                "addMasterList": {
+                    "firstName": fname,
+                    "lastName": lname,
+                    "email": email,
+                    "primaryPhone": phone
+                }
+            },
             timeout=10
         )
         add_json = add_resp.json()
-        
         if add_json.get("error"):
             return jsonify({"error": add_json["error"]})
-            
     except Exception as e:
         logger.exception("[SIGNUP] existing check error:")
         return jsonify({"error": "Unable to verify registration status."})
 
-    # Only proceed if user doesn't exist
     if not add_json.get("success"):
         return jsonify({"error": "Unable to complete registration."})
 
-    # Handle group assignment
-    if not group_phone:
+    # Handle group assignment.
+    # If no secondary phone is provided, use the primary phone for both.
+    if not secondary_phone:
         try:
-            grp_resp = requests.post(SCRIPT_URL, 
+            grp_resp = requests.post(
+                SCRIPT_URL,
                 json={"updateGroup": {"primaryPhone": phone, "secondaryPhone": phone}},
                 timeout=15
             )
-            if grp_resp.json().get("error"):
-                # Rollback the master list entry
-                rollback_payload = {"removeMasterList": {"phone": phone}}
+            grp_json = grp_resp.json()
+            if grp_json.get("error"):
+                # Roll back the master list entry if group assignment fails.
+                rollback_payload = {"removeMasterList": {"primaryPhone": phone}}
                 requests.post(SCRIPT_URL, json=rollback_payload, timeout=10)
-                return jsonify({"error": "Unable to complete registration."})
+                return jsonify({"error": grp_json.get("error", "Unable to complete registration.")})
         except Exception as e:
             logger.exception("[SIGNUP] group assignment error:")
-            rollback_payload = {"removeMasterList": {"phone": phone}}
+            rollback_payload = {"removeMasterList": {"primaryPhone": phone}}
             requests.post(SCRIPT_URL, json=rollback_payload, timeout=10)
             return jsonify({"error": "Unable to complete registration."})
     else:
         success = True
-        for gphone in [x.strip() for x in group_phone.split(",") if x.strip()]:
-            gphone_norm = normalize_phone(gphone)
-            if gphone_norm:
-                try:
-                    group_resp = requests.post(SCRIPT_URL,
-                        json={"updateGroup": {
-                            "primaryPhone": phone,
-                            "secondaryPhone": gphone_norm
-                        }},
-                        timeout=15
-                    )
-                    if group_resp.json().get("error"):
-                        success = False
-                        break
-                except Exception:
-                    success = False
-                    break
-        
+        secondary_norm = normalize_phone(secondary_phone)
+        try:
+            group_resp = requests.post(
+                SCRIPT_URL,
+                json={"updateGroup": {"primaryPhone": phone, "secondaryPhone": secondary_norm}},
+                timeout=15
+            )
+            group_json = group_resp.json()
+            if group_json.get("error"):
+                success = False
+        except Exception as e:
+            success = False
+
         if not success:
-            rollback_payload = {"removeMasterList": {"phone": phone}}
+            rollback_payload = {"removeMasterList": {"primaryPhone": phone}}
             requests.post(SCRIPT_URL, json=rollback_payload, timeout=10)
             return jsonify({"error": "Unable to complete group registration."})
-
+    
     return jsonify({"success": True})
 
 ###############################################################################
