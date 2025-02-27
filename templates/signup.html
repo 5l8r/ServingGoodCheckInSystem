@@ -170,7 +170,7 @@
       <button type="submit" id="signup-btn">Sign Up</button>
     </form>
     
-    <button id="back-to-login" type="button">Back to Login</button>
+    <button id="back-to-login" type="button">Back to Check-In</button>
     
     <div class="spinner" id="loading-spinner"></div>
     <div id="error-msg" class="error"></div>
@@ -178,24 +178,12 @@
   </div>
   
   <script>
-    const form = document.getElementById("signup-form");
-    const errorDiv = document.getElementById("error-msg");
-    const successDiv = document.getElementById("success-msg");
-    const spinner = document.getElementById("loading-spinner");
-    const backToLoginBtn = document.getElementById("back-to-login");
-    
-    // Toggle the group section automatically based on the checkbox.
-    const toggleGroupCheckbox = document.getElementById("toggle-group");
-    const groupSection = document.getElementById("group-section");
-    toggleGroupCheckbox.addEventListener("change", () => {
-      groupSection.style.display = toggleGroupCheckbox.checked ? "block" : "none";
-    });
-    
-    // "Back to Login" button action.
-    backToLoginBtn.addEventListener("click", () => {
-      window.location.href = "/";
-    });
-    
+    // Helper function for logging (uses console.log)
+    function logDebug(...args) {
+      console.log(...args);
+    }
+
+    // Normalize phone on the client side
     function frontEndNormalizePhone(raw) {
       if (!raw) return null;
       const stripped = raw.replace(/[^\d]/g, "");
@@ -205,18 +193,37 @@
       }
       return null;
     }
-    
+
+    // Toggle the group section based on checkbox
+    const toggleGroupCheckbox = document.getElementById("toggle-group");
+    const groupSection = document.getElementById("group-section");
+    toggleGroupCheckbox.addEventListener("change", () => {
+      groupSection.style.display = toggleGroupCheckbox.checked ? "block" : "none";
+    });
+
+    // "Back to Check-In" button action
+    const backToLoginBtn = document.getElementById("back-to-login");
+    backToLoginBtn.addEventListener("click", () => {
+      window.location.href = "/";
+    });
+
+    // Form submission handler
+    const form = document.getElementById("signup-form");
+    const errorDiv = document.getElementById("error-msg");
+    const successDiv = document.getElementById("success-msg");
+    const spinner = document.getElementById("loading-spinner");
+
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       errorDiv.textContent = "";
       successDiv.textContent = "";
       spinner.style.display = "block";
-      
+
       const fname = document.getElementById("fname").value.trim();
       const lname = document.getElementById("lname").value.trim();
       const email = document.getElementById("email").value.trim();
       const phone = document.getElementById("phone").value.trim();
-      
+
       let groupPhone = "";
       if (toggleGroupCheckbox.checked) {
         const gp = document.getElementById("group-phone").value.trim();
@@ -235,20 +242,20 @@
           groupPhone = normalized;
         }
       }
-      
+
       if (!fname || !lname || !email || !phone) {
         spinner.style.display = "none";
         errorDiv.textContent = "Please fill all required fields.";
         return;
       }
-      
+
       const normalizedPhone = frontEndNormalizePhone(phone);
       if (!normalizedPhone) {
         spinner.style.display = "none";
         errorDiv.textContent = "Invalid phone number format.";
         return;
       }
-      
+
       // Build the payload exactly as expected by your backend.
       const payload = {
         firstName: fname,
@@ -257,9 +264,9 @@
         phone: normalizedPhone,
         groupPhone: groupPhone
       };
-      
+
       logDebug("Payload to send:", payload);
-      
+
       try {
         const resp = await fetch("/signup", {
           method: "POST",
@@ -267,17 +274,19 @@
           body: JSON.stringify(payload)
         });
         spinner.style.display = "none";
-        
-        // Attempt to parse response as JSON. If it fails, show the raw response.
+
+        // Clone the response so we can read it safely.
         let json;
         try {
           json = await resp.json();
         } catch (parseError) {
-          const textResp = await resp.text();
-          errorDiv.textContent = "Server returned non-JSON: " + textResp;
+          // If JSON parsing fails, use the clone to get the raw text.
+          const cloneResp = resp.clone();
+          const textResp = await cloneResp.text();
+          errorDiv.textContent = "Server returned invalid JSON: " + textResp;
           return;
         }
-        
+
         logDebug("Response from /signup:", json);
         if (json.error) {
           errorDiv.textContent = json.error;
@@ -293,11 +302,6 @@
         errorDiv.textContent = "Error: " + err.message;
       }
     });
-    
-    // Simple client-side logging function.
-    function logDebug(...args) {
-      console.log(...args);
-    }
   </script>
 </body>
 </html>
