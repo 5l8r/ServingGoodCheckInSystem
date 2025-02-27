@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <title>Serving Good - Sign Up</title>
   <style>
-    /* Match the dimensions from index.html */
+    /* Basic layout */
     body {
       font-family: Arial, sans-serif;
       background-color: #f9f9f9;
-      margin: 0; 
+      margin: 0;
       padding: 0;
       display: flex;
       justify-content: center;
@@ -19,16 +19,15 @@
       max-width: 400px;
       margin: 0 auto;
       padding: 20px;
-      background: white; 
+      background: #fff;
       border-radius: 10px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
       text-align: center;
-      position: relative;
     }
-    label { 
-      display: block; 
-      text-align: left; 
-      margin-bottom: 5px; 
+    label {
+      display: block;
+      text-align: left;
+      margin-bottom: 5px;
     }
     input[type="text"],
     input[type="email"] {
@@ -41,13 +40,13 @@
       border-radius: 4px;
     }
     .error {
-      color: red; 
-      font-weight: bold; 
+      color: red;
+      font-weight: bold;
       margin-top: 10px;
     }
     .success {
-      color: green; 
-      font-weight: bold; 
+      color: green;
+      font-weight: bold;
       margin-top: 10px;
     }
     .group-section {
@@ -55,11 +54,10 @@
       padding: 10px;
       display: none;
     }
-    /* When checkbox is checked, show group-section */
+    /* Show group section when checkbox is checked */
     #toggle-group:checked ~ .group-section {
       display: block;
     }
-    /* Global button styling */
     button {
       width: 100%;
       padding: 10px 15px;
@@ -68,44 +66,27 @@
       border: none;
       border-radius: 5px;
       cursor: pointer;
-      color: white;
+      color: #fff;
       transition: background-color 0.2s ease-in;
     }
-    /* Sign Up Button */
     #signup-btn {
       background-color: #008000;
     }
     #signup-btn:hover {
       background-color: #006000;
     }
-    /* Back to Login Button */
     #back-to-login {
       background-color: #007bff;
     }
     #back-to-login:hover {
       background-color: #0056b3;
     }
-    /* Make checkbox bigger */
     input[type="checkbox"] {
       width: 18px;
       height: 18px;
       margin-right: 8px;
       vertical-align: middle;
     }
-    label, p {
-      font-size: 16px;
-      margin: 0;
-      display: block;
-    }
-    /* Group shopping message */
-    .group-warning {
-      font-weight: bold;
-      margin: 16px 0;
-    }
-    .group-warning .warning-text {
-      color: red;
-    }
-    /* Spinner style */
     .spinner {
       display: none;
       margin: 20px auto;
@@ -119,16 +100,6 @@
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
-    }
-    form label {
-      font-weight: bold;
-      display: block;
-      margin-bottom: 4px;
-    }
-    #success-div {
-      color: #008000;
-      font-weight: bold;
-      margin-top: 10px;
     }
   </style>
 </head>
@@ -148,11 +119,10 @@
       <label for="phone">Phone Number</label>
       <input type="text" id="phone" name="phone" placeholder="(555) 555-5555" required />
 
-      <!-- Group shopping instructions -->
       <p class="group-warning">
         If you are shopping with a group, please check the box below and enter the phone number of your group member.
         <span class="warning-text">
-          Remember, each shopper must have their own line number. Failure to follow this rule may result in a ban.
+          Remember, each shopper must have their own line number.
         </span>
       </p>
 
@@ -177,36 +147,34 @@
   </div>
 
   <script>
-    // Helper function for logging
+    // Simple client-side logging (to browser console)
     function logDebug(...args) {
       console.log(...args);
     }
 
-    // Normalize phone on the client side
+    // Client-side phone normalization (matches server logic)
     function frontEndNormalizePhone(raw) {
       if (!raw) return null;
       const stripped = raw.replace(/[^\d]/g, "");
       if (stripped.length === 10) return stripped;
-      if (stripped.length === 11 && stripped.startsWith("1")) {
-        return stripped.slice(1);
-      }
+      if (stripped.length === 11 && stripped.startsWith("1")) return stripped.slice(1);
       return null;
     }
 
-    // Toggle the group section based on checkbox
+    // Toggle group section based on checkbox state.
     const toggleGroupCheckbox = document.getElementById("toggle-group");
     const groupSection = document.getElementById("group-section");
     toggleGroupCheckbox.addEventListener("change", () => {
       groupSection.style.display = toggleGroupCheckbox.checked ? "block" : "none";
     });
 
-    // "Back to Check-In" button
+    // "Back to Check-In" button action.
     const backToLoginBtn = document.getElementById("back-to-login");
     backToLoginBtn.addEventListener("click", () => {
       window.location.href = "/";
     });
 
-    // Form submission handler
+    // Form submission handler.
     const form = document.getElementById("signup-form");
     const errorDiv = document.getElementById("error-msg");
     const successDiv = document.getElementById("success-msg");
@@ -255,33 +223,32 @@
         return;
       }
 
-      // Build the payload exactly as expected by your server
+      // Build payload exactly as expected.
       const payload = {
         firstName: fname,
         lastName: lname,
         email: email,
         phone: normalizedPhone,
-        groupPhone: groupPhone // Empty string if not shopping in a group
+        groupPhone: groupPhone // Will be empty string if not provided.
       };
 
       logDebug("Payload to send:", payload);
 
       try {
-        const response = await fetch("/signup", {
+        // Post the sign-up data to the Flask app.
+        const resp = await fetch("/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
         spinner.style.display = "none";
-
-        const json = await response.json();
+        // Parse JSON response.
+        const json = await resp.json();
         logDebug("Response from /signup:", json);
-
         if (json.error) {
           errorDiv.textContent = json.error;
           return;
         }
-
         successDiv.textContent = "Successfully signed up! Redirecting...";
         setTimeout(() => {
           window.location.href = "/";
