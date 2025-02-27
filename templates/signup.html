@@ -145,8 +145,8 @@
       <label for="email">Email</label>
       <input type="email" id="email" name="email" required />
       
-      <label for="phone">Phone Number</label>
-      <input type="text" id="phone" name="phone" placeholder="(555) 555-5555" required />
+      <label for="primaryPhone">Primary Phone Number</label>
+      <input type="text" id="primaryPhone" name="primaryPhone" placeholder="(555) 555-5555" required />
       
       <!-- Group shopping instructions -->
       <p class="group-warning">
@@ -161,10 +161,10 @@
         I am shopping in a group.
       </label>
       
-      <!-- Single group member field (no add button) -->
+      <!-- Group member field -->
       <div class="group-section" id="group-section">
-        <p style="font-weight: bold;">Group Shopper Phone Number</p>
-        <input type="text" id="group-phone" placeholder="Phone Number" />
+        <p style="font-weight: bold;">Secondary Phone Number</p>
+        <input type="text" id="secondaryPhone" name="secondaryPhone" placeholder="Phone Number" />
       </div>
       
       <button type="submit" id="signup-btn">Sign Up</button>
@@ -176,12 +176,13 @@
     <div id="error-msg" class="error"></div>
     <div id="success-msg" class="success"></div>
   </div>
+  
   <script>
     // Helper function for logging (uses console.log)
     function logDebug(...args) {
       console.log(...args);
     }
-  
+    
     // Normalize phone on the client side
     function frontEndNormalizePhone(raw) {
       if (!raw) return null;
@@ -192,101 +193,100 @@
       }
       return null;
     }
-  
-    // Toggle the group section based on checkbox
+    
+    // Toggle the group section based on the checkbox
     const toggleGroupCheckbox = document.getElementById("toggle-group");
     const groupSection = document.getElementById("group-section");
     toggleGroupCheckbox.addEventListener("change", () => {
       groupSection.style.display = toggleGroupCheckbox.checked ? "block" : "none";
     });
-  
+    
     // "Back to Check-In" button action
     const backToLoginBtn = document.getElementById("back-to-login");
     backToLoginBtn.addEventListener("click", () => {
       window.location.href = "/";
     });
-  
+    
     // Form submission handler
     const form = document.getElementById("signup-form");
     const errorDiv = document.getElementById("error-msg");
     const successDiv = document.getElementById("success-msg");
     const spinner = document.getElementById("loading-spinner");
-  
+    
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       errorDiv.textContent = "";
       successDiv.textContent = "";
       spinner.style.display = "block";
-  
+      
       const fname = document.getElementById("fname").value.trim();
       const lname = document.getElementById("lname").value.trim();
       const email = document.getElementById("email").value.trim();
-      const phone = document.getElementById("phone").value.trim();
-  
-      let groupPhone = "";
+      const primaryPhone = document.getElementById("primaryPhone").value.trim();
+      
+      let secondaryPhone = "";
       if (toggleGroupCheckbox.checked) {
-        const gp = document.getElementById("group-phone").value.trim();
-        if (gp) {
-          const normalized = frontEndNormalizePhone(gp);
-          if (!normalized) {
-            errorDiv.textContent = "Invalid group phone number format.";
+        const sp = document.getElementById("secondaryPhone").value.trim();
+        if (sp) {
+          const normalizedSp = frontEndNormalizePhone(sp);
+          if (!normalizedSp) {
+            errorDiv.textContent = "Invalid secondary phone number format.";
             spinner.style.display = "none";
             return;
           }
-          if (normalized === frontEndNormalizePhone(phone)) {
-            errorDiv.textContent = "You cannot add your own phone number as a group member.";
+          if (normalizedSp === frontEndNormalizePhone(primaryPhone)) {
+            errorDiv.textContent = "You cannot add your own phone number as a secondary phone.";
             spinner.style.display = "none";
             return;
           }
-          groupPhone = normalized;
+          secondaryPhone = normalizedSp;
         }
       }
-  
-      if (!fname || !lname || !email || !phone) {
+      
+      if (!fname || !lname || !email || !primaryPhone) {
         spinner.style.display = "none";
         errorDiv.textContent = "Please fill all required fields.";
         return;
       }
-  
-      const normalizedPhone = frontEndNormalizePhone(phone);
-      if (!normalizedPhone) {
+      
+      const normalizedPrimary = frontEndNormalizePhone(primaryPhone);
+      if (!normalizedPrimary) {
         spinner.style.display = "none";
-        errorDiv.textContent = "Invalid phone number format.";
+        errorDiv.textContent = "Invalid primary phone number format.";
         return;
       }
-  
-      // Build the payload exactly as expected by your backend.
+      
+      // Build the payload with consistent variable names.
       const payload = {
         firstName: fname,
         lastName: lname,
         email: email,
-        phone: normalizedPhone,
-        groupPhone: groupPhone
+        primaryPhone: normalizedPrimary,
+        secondaryPhone: secondaryPhone
       };
-  
+      
       logDebug("Payload to send:", payload);
-  
+      
       try {
-        const resp = await fetch("/signup", {
+        const response = await fetch("/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
         spinner.style.display = "none";
-  
-        // Clone the response BEFORE reading it
-        const respClone = resp.clone();
+        
+        // Clone the response before reading it
+        const respClone = response.clone();
         let json;
         try {
-          json = await resp.json();
+          json = await response.json();
         } catch (parseError) {
           const textResp = await respClone.text();
           errorDiv.textContent = "Server returned invalid JSON: " + textResp;
           return;
         }
-  
+        
         logDebug("Response from /signup:", json);
-  
         if (json.error) {
           errorDiv.textContent = json.error;
           return;
